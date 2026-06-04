@@ -1,0 +1,84 @@
+##############################################################################
+# Mirth Connector — add-on services for gizmo-docker-twin-healthcare
+#
+# Usage (run from the gizmo-docker-twin-healthcare root):
+#   docker compose -f docker-compose.yaml -f Mirth_Connector/docker-compose.yml up -d
+#
+# Or standalone (after the parent compose is already running):
+#   docker compose -f docker-compose.yml up -d
+#   (networks must already exist — started by the parent compose)
+##############################################################################
+
+services:
+
+  # --------------------------------------------------------------------------
+  # plc_exporter
+  # Polls all 5 PLCs via Modbus TCP every POLL_INTERVAL seconds and writes
+  # a JSON snapshot to the shared plc_data volume.
+  # Sits on level1_plc (10.10.30.19) to reach PLCs directly.
+  # --------------------------------------------------------------------------
+  plc_exporter:
+    container_name: plc_exporter
+    build:
+      context: ./plc_exporter
+      dockerfile: Dockerfile
+    restart: always
+    cap_add:
+      - NET_ADMIN
+    environment:
+      OUTPUT_DIR: /data/plc_readings
+      POLL_INTERVAL: "30"
+      MODBUS_TIMEOUT: "5"
+    volumes:
+      - plc_data:/data/plc_readings
+    networks:
+      level1_plc:
+        ipv4_address: 10.10.30.19
+    depends_on:
+      - plc_signosvitales
+      - plc_perfusor
+      - plc_cpap
+      - plc_tac
+      - plc_hospital
+
+  # --------------------------------------------------------------------------
+  # mirth-connect
+  # NextGen Connect (Mirth Connect) 4.4.1 — integration engine.
+  # Reads JSON files from plc_data volume and transforms them to HL7 / FHIR.
+  # Admin console: https://localhost:8443  (admin / admin on first start)
+  # Sits on level3_operaciones (10.10.10.14) to reach OpenEMR (10.10.10.16).
+  # --------------------------------------------------------------------------
+  mirth-connect:
+    container_name: mirth-connect
+    image: nextgenhealthcare/connect:4.4.1
+    restart: always
+    cap_add:
+      - NET_ADMIN
+    environment:
+      DATABASE: derby
+      KEYSTORE_STOREPASS: changeit
+      KEYSTORE_KEYPASS: changeit
+    volumes:
+      - plc_data:/data/plc_readings:ro
+      - hl7_out:/data/hl7_out
+      - mirth_appdata:/opt/connect/appdata
+      - ./mirth/channels:/opt/connect/appdata/channel-backups:ro
+    ports:
+      - "8443:8443"     # Mirth Connect administrator (HTTPS)
+      - "6661:6661"     # HL7 MLLP listener (optional)
+    networks:
+      level3_operaciones:
+        ipv4_address: 10.10.10.14
+    depends_on:
+      - plc_exporter
+
+volumes:
+  plc_data: {}          # JSON snapshots: plc_exporter writes, mirth reads
+  hl7_out: {}           # HL7 ORU^R01 files staged for OpenEMR
+  mirth_appdata: {}     # Mirth Connect persistent config / Derby DB
+
+networks:
+  level1_plc:
+    external: true
+  level3_operaciones:
+    external: true
