@@ -1,0 +1,504 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Mirth Connect channel: Orthanc DICOM Study → HL7 v2 ORU^R01
+  -------------------------------------------------------------
+  Source : JavaScript Reader — polls Orthanc REST API (/changes) every 30 s
+           Detects new DICOM studies (ChangeType = NewStudy)
+           Fetches study metadata from /studies/{id}
+           Returns one study JSON per message tick
+
+  Transformer: JavaScript — builds HL7 v2 ORU^R01 with DICOM study reference
+               OBX|1 → StudyInstanceUID
+               OBX|2 → Modality (CT / MR / XA ...)
+               OBX|3 → Study description
+               OBX|4 → Accession number
+
+  Destination 1: File Writer — writes .hl7 to /data/hl7_out/ (staging)
+  Destination 2: HTTP Sender — POST to OpenEMR FHIR API (disabled by default)
+
+  Flow context:
+    tac_scan trigger (gizmo-brain.py)
+      ├─► send_dicom.py ──► Orthanc C-STORE (10.10.10.15:4242)   ← direct DICOM
+      └─► [this channel polls Orthanc REST] ──► HL7 ──► OpenEMR  ← this channel
+
+  Import via: Mirth Connect Administrator → Channels → Import Channel
+-->
+<channel version="4.4.0">
+  <id>b2c3d4e5-f6a7-8901-bcde-f12345678901</id>
+  <nextMetaDataId>3</nextMetaDataId>
+  <name>Orthanc to OpenEMR</name>
+  <description>Polls Orthanc REST API for new DICOM studies and sends HL7 v2 ORU^R01 notifications to OpenEMR. Triggered by TAC scan events from plc_tac via gizmo-brain.py and send_dicom.py.</description>
+  <enabled>true</enabled>
+  <lastModified>
+    <time>1717545600000</time>
+    <timezone>UTC</timezone>
+  </lastModified>
+  <revision>1</revision>
+
+  <!-- ====================================================================
+       SOURCE: JavaScript Reader — polls Orthanc /changes every 30 s
+       Uses globalChannelMap to track last processed sequence and queue
+       pending studies so each message tick processes exactly one study.
+       ==================================================================== -->
+  <sourceConnector version="4.4.0">
+    <metaDataId>0</metaDataId>
+    <name>sourceConnector</name>
+    <properties class="com.mirth.connect.connectors.js.JavaScriptReceiverProperties" version="4.4.0">
+      <pluginProperties/>
+      <sourceConnectorProperties version="4.4.0">
+        <responseVariable>None</responseVariable>
+        <queueOffload>false</queueOffload>
+        <respondAfterProcessing>true</respondAfterProcessing>
+        <processBatch>false</processBatch>
+        <firstResponse>false</firstResponse>
+        <processingThreads>1</processingThreads>
+        <resourceIds class="linked-hash-map">
+          <entry>
+            <string>Default Resource</string>
+            <string>[Default Resource]</string>
+          </entry>
+        </resourceIds>
+        <queueBufferSize>1000</queueBufferSize>
+      </sourceConnectorProperties>
+      <pollConnectorPropertiesAdvanced version="4.4.0">
+        <pollOnStart>true</pollOnStart>
+        <scheduleType>INTERVAL</scheduleType>
+        <scheduledWeeklyDays/>
+        <intervalType>TIME</intervalType>
+        <timeZone>UTC</timeZone>
+        <interval>30000</interval>
+        <cronJobs/>
+      </pollConnectorPropertiesAdvanced>
+      <script><![CDATA[
+// -------------------------------------------------------------------------
+// Poll Orthanc REST API for new DICOM studies
+//
+// State is persisted in globalChannelMap between ticks:
+//   orthanc_last_seq  : last processed Orthanc change sequence number
+//   orthanc_queue     : JSON array of pending study IDs to process
+// -------------------------------------------------------------------------
+
+var ORTHANC_BASE = 'http://10.10.10.15:8042';
+
+// Helper: HTTP GET → parsed JSON
+function httpGet(path) {
+  var url = new java.net.URL(ORTHANC_BASE + path);
+  var conn = url.openConnection();
+  conn.setRequestMethod('GET');
+  conn.setRequestProperty('Accept', 'application/json');
+  conn.setConnectTimeout(5000);
+  conn.setReadTimeout(10000);
+
+  var code = conn.getResponseCode();
+  if (code !== 200) {
+    logger.warn('Orthanc HTTP ' + code + ' for ' + path);
+    return null;
+  }
+
+  var reader = new java.io.BufferedReader(
+    new java.io.InputStreamReader(conn.getInputStream(), 'UTF-8')
+  );
+  var sb = new java.lang.StringBuilder();
+  var line;
+  while ((line = reader.readLine()) !== null) {
+    sb.append(line);
+  }
+  reader.close();
+  return JSON.parse(sb.toString());
+}
+
+// ---- Read state ----
+var lastSeq = globalChannelMap.get('orthanc_last_seq') || 0;
+var queueRaw = globalChannelMap.get('orthanc_queue');
+var queue = queueRaw ? JSON.parse(queueRaw) : [];
+
+// ---- If queue has pending studies, return the next one ----
+if (queue.length > 0) {
+  var studyId = queue.shift();
+  globalChannelMap.put('orthanc_queue', JSON.stringify(queue));
+
+  var study = httpGet('/studies/' + studyId);
+  if (!study) return null;
+
+  logger.info('Orthanc study ready for HL7: ' + studyId);
+  return JSON.stringify(study);
+}
+
+// ---- Queue is empty: fetch new changes from Orthanc ----
+var changes = httpGet('/changes?since=' + lastSeq + '&limit=100');
+if (!changes) return null;
+
+var newStudyIds = [];
+for (var i = 0; i < changes.Changes.length; i++) {
+  var c = changes.Changes[i];
+  if (c.ChangeType === 'NewStudy') {
+    newStudyIds.push(c.ID);
+  }
+}
+
+// Update last processed sequence
+if (changes.Last !== undefined) {
+  globalChannelMap.put('orthanc_last_seq', changes.Last);
+}
+
+if (newStudyIds.length === 0) return null;
+
+// Process first study now, queue the rest
+var firstId = newStudyIds.shift();
+if (newStudyIds.length > 0) {
+  globalChannelMap.put('orthanc_queue', JSON.stringify(newStudyIds));
+}
+
+var firstStudy = httpGet('/studies/' + firstId);
+if (!firstStudy) return null;
+
+logger.info('New Orthanc study detected: ' + firstId +
+  ' Modality=' + (firstStudy.MainDicomTags && firstStudy.MainDicomTags.Modality || 'UNKNOWN'));
+return JSON.stringify(firstStudy);
+      ]]></script>
+    </properties>
+
+    <!-- Transformer: parse Orthanc study JSON, extract key fields -->
+    <transformer version="4.4.0">
+      <elements>
+        <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+          <name>Extract study metadata</name>
+          <sequenceNumber>0</sequenceNumber>
+          <enabled>true</enabled>
+          <script><![CDATA[
+var study = JSON.parse(msg);
+var tags  = study.MainDicomTags      || {};
+var ptags = study.PatientMainDicomTags || {};
+
+channelMap.put('study_id',           study.ID                          || '');
+channelMap.put('study_instance_uid', tags.StudyInstanceUID             || '');
+channelMap.put('study_date',         tags.StudyDate                    || '');
+channelMap.put('study_time',         tags.StudyTime                    || '');
+channelMap.put('modality',           tags.Modality                     || 'OT');
+channelMap.put('study_description',  tags.StudyDescription             || '');
+channelMap.put('accession_number',   tags.AccessionNumber              || '');
+channelMap.put('patient_id',         ptags.PatientID                   || 'GIZMO_PATIENT_001');
+channelMap.put('patient_name',       ptags.PatientName                 || 'Paciente^Virtual');
+channelMap.put('referring_physician',tags.ReferringPhysicianName       || '');
+
+logger.info('Study metadata extracted: PatientID=' + ptags.PatientID +
+  ' Modality=' + tags.Modality + ' UID=' + tags.StudyInstanceUID);
+          ]]></script>
+        </com.mirth.connect.plugins.javascriptrule.JavaScriptRule>
+      </elements>
+      <inboundDataType>RAW</inboundDataType>
+      <outboundDataType>RAW</outboundDataType>
+      <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+          <splitType>JavaScript</splitType>
+          <batchScript></batchScript>
+        </batchProperties>
+      </inboundProperties>
+      <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+          <splitType>JavaScript</splitType>
+          <batchScript></batchScript>
+        </batchProperties>
+      </outboundProperties>
+    </transformer>
+
+    <filter version="4.4.0">
+      <elements/>
+    </filter>
+    <transportName>JavaScript Reader</transportName>
+    <mode>SOURCE</mode>
+    <enabled>true</enabled>
+    <waitForPrevious>true</waitForPrevious>
+  </sourceConnector>
+
+  <destinationConnectors>
+
+    <!-- Destination 1: Write HL7 ORU^R01 (DICOM study notification) to file -->
+    <connector version="4.4.0">
+      <metaDataId>1</metaDataId>
+      <name>Write HL7 ORU^R01 DICOM</name>
+      <properties class="com.mirth.connect.connectors.file.FileDispatcherProperties" version="4.4.0">
+        <pluginProperties/>
+        <destinationConnectorProperties version="4.4.0">
+          <queueEnabled>false</queueEnabled>
+          <sendFirst>false</sendFirst>
+          <retryIntervalMillis>10000</retryIntervalMillis>
+          <regenerateTemplate>false</regenerateTemplate>
+          <retryCount>3</retryCount>
+          <rotate>false</rotate>
+          <includeFilterTransformer>false</includeFilterTransformer>
+          <threadCount>1</threadCount>
+          <queueConnectorProperties/>
+          <validateResponse>false</validateResponse>
+          <resourceIds class="linked-hash-map">
+            <entry>
+              <string>Default Resource</string>
+              <string>[Default Resource]</string>
+            </entry>
+          </resourceIds>
+          <queueBufferSize>1000</queueBufferSize>
+        </destinationConnectorProperties>
+        <scheme>FILE</scheme>
+        <host>/data/hl7_out</host>
+        <outputPattern>DICOM_ORU_${new Date().getTime()}.hl7</outputPattern>
+        <anonymous>true</anonymous>
+        <username></username>
+        <password></password>
+        <timeout>10000</timeout>
+        <keepConnectionOpen>false</keepConnectionOpen>
+        <maxIdleTime>0</maxIdleTime>
+        <secure>true</secure>
+        <passive>true</passive>
+        <validateConnection>true</validateConnection>
+        <appendToFile>false</appendToFile>
+        <charsetEncoding>UTF-8</charsetEncoding>
+        <temporary>false</temporary>
+        <binary>false</binary>
+      </properties>
+
+      <transformer version="4.4.0">
+        <elements>
+          <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+            <name>Build HL7 ORU^R01 — DICOM study reference</name>
+            <sequenceNumber>0</sequenceNumber>
+            <enabled>true</enabled>
+            <script><![CDATA[
+// -----------------------------------------------------------------------
+// Build HL7 v2.5.1 ORU^R01 — Radiology study completed notification
+// Carries the DICOM StudyInstanceUID so OpenEMR can link to the image
+// stored in Orthanc (10.10.10.15:8042)
+// -----------------------------------------------------------------------
+var studyUID   = channelMap.get('study_instance_uid') || '';
+var studyDate  = channelMap.get('study_date')         || '';
+var studyTime  = channelMap.get('study_time')         || '';
+var modality   = channelMap.get('modality')           || 'OT';
+var studyDesc  = channelMap.get('study_description')  || '';
+var accession  = channelMap.get('accession_number')   || '';
+var patientId  = channelMap.get('patient_id')         || 'GIZMO_PATIENT_001';
+var patientName= channelMap.get('patient_name')       || 'Paciente^Virtual';
+var physician  = channelMap.get('referring_physician')|| '';
+
+var now = new Date();
+function pad(n) { return n < 10 ? '0' + n : '' + n; }
+var hl7ts = '' + now.getFullYear() +
+  pad(now.getMonth()+1) + pad(now.getDate()) +
+  pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds());
+
+var msgId = 'DICOM' + hl7ts;
+var studyDT = studyDate + studyTime;
+
+// LOINC 18748-4 = Diagnostic imaging study
+// LOINC 110180-7 = Study instance UID
+// DICOM CID 121022 = Source of Measurement (StudyInstanceUID)
+var lines = [
+  'MSH|^~\\&|ORTHANC|HOSPITAL_GIZMO|MIRTH_CONNECT|OPENEMR|' + hl7ts +
+    '||ORU^R01^ORU_R01|' + msgId + '|P|2.5.1|||AL|AL|',
+
+  'PID|1||' + patientId + '^^^HOSPITAL_GIZMO&HOSPITAL&L||' + patientName +
+    '||19800101|U|',
+
+  // OBR — radiology order/result
+  'OBR|1||' + accession + '|18748-4^Diagnostic imaging study^LN|||' +
+    studyDT + '|||' + physician + '||||||' + studyDT + '|||' + modality +
+    '|||||||||F',
+
+  // OBX 1 — StudyInstanceUID (DICOM reference — allows OpenEMR to open in Orthanc viewer)
+  'OBX|1|RP|110180-7^Study Instance UID^LN||' + studyUID +
+    '^' + modality + '^ORTHANC&http://10.10.10.15:8042&ISO|||||F|||' + hl7ts,
+
+  // OBX 2 — Modality
+  'OBX|2|ST|59847-4^Imaging modality^LN||' + modality + '|||||F|||' + hl7ts,
+
+  // OBX 3 — Study description
+  'OBX|3|ST|32484-8^Study description^LN||' + studyDesc + '|||||F|||' + hl7ts,
+
+  // OBX 4 — Orthanc viewer URL (direct link to study)
+  'OBX|4|RP|113014^Referenced SOP Instance^DCM||http://10.10.10.15:8042/app/explorer.html' +
+    '#study?uuid=' + channelMap.get('study_id') + '|||||F|||' + hl7ts,
+];
+
+tmp = lines.join('\r');
+            ]]></script>
+          </com.mirth.connect.plugins.javascriptrule.JavaScriptRule>
+        </elements>
+        <inboundDataType>RAW</inboundDataType>
+        <outboundDataType>RAW</outboundDataType>
+        <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+            <splitType>JavaScript</splitType>
+            <batchScript></batchScript>
+          </batchProperties>
+        </inboundProperties>
+        <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+            <splitType>JavaScript</splitType>
+            <batchScript></batchScript>
+          </batchProperties>
+        </outboundProperties>
+      </transformer>
+
+      <filter version="4.4.0">
+        <elements/>
+      </filter>
+      <transportName>File Writer</transportName>
+      <mode>DESTINATION</mode>
+      <enabled>true</enabled>
+      <waitForPrevious>true</waitForPrevious>
+    </connector>
+
+    <!-- Destination 2: HTTP POST to OpenEMR FHIR API — ImagingStudy resource (DISABLED) -->
+    <connector version="4.4.0">
+      <metaDataId>2</metaDataId>
+      <name>Send to OpenEMR FHIR ImagingStudy</name>
+      <properties class="com.mirth.connect.connectors.http.HttpDispatcherProperties" version="4.4.0">
+        <pluginProperties/>
+        <destinationConnectorProperties version="4.4.0">
+          <queueEnabled>true</queueEnabled>
+          <sendFirst>false</sendFirst>
+          <retryIntervalMillis>30000</retryIntervalMillis>
+          <regenerateTemplate>false</regenerateTemplate>
+          <retryCount>3</retryCount>
+          <rotate>false</rotate>
+          <includeFilterTransformer>false</includeFilterTransformer>
+          <threadCount>1</threadCount>
+          <queueConnectorProperties/>
+          <validateResponse>false</validateResponse>
+          <resourceIds class="linked-hash-map">
+            <entry>
+              <string>Default Resource</string>
+              <string>[Default Resource]</string>
+            </entry>
+          </resourceIds>
+          <queueBufferSize>1000</queueBufferSize>
+        </destinationConnectorProperties>
+        <host>http://10.10.10.16/apis/default/fhir/ImagingStudy</host>
+        <method>POST</method>
+        <useProxyServer>false</useProxyServer>
+        <proxyAddress></proxyAddress>
+        <proxyPort></proxyPort>
+        <includeResponseHeaders>false</includeResponseHeaders>
+        <multipart>false</multipart>
+        <useAuthentication>true</useAuthentication>
+        <authenticationType>Basic</authenticationType>
+        <username>admin</username>
+        <password>pass</password>
+        <headers class="linked-hash-map">
+          <entry>
+            <string>Content-Type</string>
+            <string>application/fhir+json</string>
+          </entry>
+          <entry>
+            <string>Accept</string>
+            <string>application/fhir+json</string>
+          </entry>
+        </headers>
+        <parameters class="linked-hash-map"/>
+        <responseXmlPathQuery></responseXmlPathQuery>
+        <responseStatusCodeXmlPathQuery></responseStatusCodeXmlPathQuery>
+        <charset>UTF-8</charset>
+        <socketTimeout>30000</socketTimeout>
+      </properties>
+
+      <transformer version="4.4.0">
+        <elements>
+          <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+            <name>Build FHIR ImagingStudy resource</name>
+            <sequenceNumber>0</sequenceNumber>
+            <enabled>true</enabled>
+            <script><![CDATA[
+// Build a FHIR R4 ImagingStudy resource for the completed TAC/DICOM study
+var studyUID  = channelMap.get('study_instance_uid') || '';
+var modality  = channelMap.get('modality')           || 'CT';
+var studyDate = channelMap.get('study_date')         || '';
+var studyDesc = channelMap.get('study_description')  || '';
+var patientId = channelMap.get('patient_id')         || 'gizmo-patient-001';
+var accession = channelMap.get('accession_number')   || '';
+
+// ISO date from DICOM YYYYMMDD
+var started = studyDate.length === 8
+  ? studyDate.substring(0,4) + '-' + studyDate.substring(4,6) + '-' + studyDate.substring(6,8) + 'T00:00:00Z'
+  : new Date().toISOString();
+
+var resource = {
+  resourceType: 'ImagingStudy',
+  status: 'available',
+  subject: {reference: 'Patient/' + patientId.toLowerCase()},
+  started: started,
+  identifier: [
+    {system: 'urn:dicom:uid', value: 'urn:oid:' + studyUID},
+    {system: 'http://hospital.gizmo/accession', value: accession}
+  ],
+  modality: [{
+    system: 'http://dicom.nema.org/resources/ontology/DCM',
+    code: modality
+  }],
+  description: studyDesc,
+  endpoint: [{
+    reference: 'Endpoint/orthanc-wado',
+    display: 'Orthanc WADO-RS — http://10.10.10.15:8042'
+  }],
+  note: [{
+    text: 'Study stored in Orthanc. View at http://10.10.10.15:8042/app/explorer.html'
+  }]
+};
+
+tmp = JSON.stringify(resource, null, 2);
+            ]]></script>
+          </com.mirth.connect.plugins.javascriptrule.JavaScriptRule>
+        </elements>
+        <inboundDataType>RAW</inboundDataType>
+        <outboundDataType>RAW</outboundDataType>
+        <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+            <splitType>JavaScript</splitType>
+            <batchScript></batchScript>
+          </batchProperties>
+        </inboundProperties>
+        <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+            <splitType>JavaScript</splitType>
+            <batchScript></batchScript>
+          </batchProperties>
+        </outboundProperties>
+      </transformer>
+
+      <filter version="4.4.0">
+        <elements/>
+      </filter>
+      <transportName>HTTP Sender</transportName>
+      <mode>DESTINATION</mode>
+      <enabled>false</enabled>
+      <waitForPrevious>true</waitForPrevious>
+    </connector>
+
+  </destinationConnectors>
+
+  <preprocessingScript>return message;</preprocessingScript>
+  <postprocessingScript>return;</postprocessingScript>
+  <deployScript>return;</deployScript>
+  <undeployScript>return;</undeployScript>
+
+  <properties class="com.mirth.connect.donkey.model.channel.ChannelProperties" version="4.4.0">
+    <clearGlobalChannelMap>false</clearGlobalChannelMap>
+    <messageStorageMode>DEVELOPMENT</messageStorageMode>
+    <encryptData>false</encryptData>
+    <encryptAttachments>false</encryptAttachments>
+    <encryptCustomMetaData>false</encryptCustomMetaData>
+    <removeContentOnCompletion>false</removeContentOnCompletion>
+    <removeOnlyFilteredOnCompletion>false</removeOnlyFilteredOnCompletion>
+    <removeAttachmentsOnCompletion>false</removeAttachmentsOnCompletion>
+    <initialState>STARTED</initialState>
+    <storeAttachments>true</storeAttachments>
+    <metaDataColumns/>
+    <archiveEnabled>true</archiveEnabled>
+    <resourceIds class="linked-hash-map">
+      <entry>
+        <string>Default Resource</string>
+        <string>[Default Resource]</string>
+      </entry>
+    </resourceIds>
+    <queueBufferSize>1000</queueBufferSize>
+    <channelDependencies/>
+  </properties>
+
+</channel>
