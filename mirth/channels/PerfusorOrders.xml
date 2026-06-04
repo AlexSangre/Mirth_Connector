@@ -1,0 +1,356 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Mirth Connect channel: OpenEMR → Perfusor Orders (MLLP Hub)
+  -------------------------------------------------------------
+  Source : MLLP Listener on port 6661
+           Receives HL7 ORM^O01 (pharmacy order) from OpenEMR
+           Parses medication name, dose, rate, and order action
+           (NW = new order, CA = cancel)
+
+  Medication → Perfusor mapping:
+    Perfusor 1: Morfina / Morphine / Fentanilo / Fentanyl
+    Perfusor 2: Noradrenalina / Norepinephrine / Dopamina / Dopamine
+    Perfusor 3: Propofol / Midazolam / Ketamina
+
+  Transformer: parses ORM^O01 → writes order JSON to /data/orders/
+  Destination 1: File Writer → /data/orders/order_{ts}.json
+  Destination 2: ACK back to OpenEMR (MSH-15 = AL → always ack)
+
+  order_executor service watches /data/orders/ and writes Modbus registers
+  directly to the perfusor PLC, closing the OpenEMR → PLC order loop.
+
+  How to send a test order from the command line:
+    echo -e "\x0bMSH|^~\&|OPENEMR|HOSPITAL|MIRTH|PLC|$(date +%Y%m%d%H%M%S)||ORM^O01|TEST001|P|2.5.1\rPID|1||GIZMO_PATIENT_001\rORC|NW|ORD001\rRXO|Morfina^^LOCAL|10|mg|IV\rTQ1|1|||30|mL/h\x1c\r" | nc 127.0.0.1 6661
+
+  Import via: Mirth Connect Administrator → Channels → Import Channel
+-->
+<channel version="4.4.0">
+  <id>d4e5f6a7-b8c9-0123-defa-234567890123</id>
+  <nextMetaDataId>3</nextMetaDataId>
+  <name>Perfusor Orders</name>
+  <description>MLLP hub: receives HL7 ORM^O01 medication orders from OpenEMR, maps medication name to perfusor number, and writes a JSON order file for the order_executor service to apply via Modbus to the perfusor PLC. Closes the OpenEMR → PLC infusion pump control loop.</description>
+  <enabled>true</enabled>
+  <lastModified>
+    <time>1717545600000</time>
+    <timezone>UTC</timezone>
+  </lastModified>
+  <revision>1</revision>
+
+  <!-- ====================================================================
+       SOURCE: MLLP Listener — port 6661
+       Receives HL7 ORM^O01 from OpenEMR and any HL7-capable system
+       ==================================================================== -->
+  <sourceConnector version="4.4.0">
+    <metaDataId>0</metaDataId>
+    <name>sourceConnector</name>
+    <properties class="com.mirth.connect.connectors.mllp.MllpReceiverProperties" version="4.4.0">
+      <pluginProperties/>
+      <sourceConnectorProperties version="4.4.0">
+        <responseVariable>d1</responseVariable>
+        <queueOffload>false</queueOffload>
+        <respondAfterProcessing>true</respondAfterProcessing>
+        <processBatch>false</processBatch>
+        <firstResponse>false</firstResponse>
+        <processingThreads>1</processingThreads>
+        <resourceIds class="linked-hash-map">
+          <entry>
+            <string>Default Resource</string>
+            <string>[Default Resource]</string>
+          </entry>
+        </resourceIds>
+        <queueBufferSize>1000</queueBufferSize>
+      </sourceConnectorProperties>
+      <listenerConnectorProperties version="4.4.0">
+        <host>0.0.0.0</host>
+        <port>6661</port>
+      </listenerConnectorProperties>
+      <charsetEncoding>UTF-8</charsetEncoding>
+      <respondBeforeProcessing>false</respondBeforeProcessing>
+      <maxConnections>10</maxConnections>
+    </properties>
+
+    <!-- Transformer: parse HL7 ORM^O01 → extract order fields -->
+    <transformer version="4.4.0">
+      <elements>
+        <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+          <name>Parse ORM^O01 pharmacy order</name>
+          <sequenceNumber>0</sequenceNumber>
+          <enabled>true</enabled>
+          <script><![CDATA[
+// -----------------------------------------------------------------------
+// Parse HL7 ORM^O01 message from OpenEMR
+//
+// Expected segments:
+//   MSH — message header
+//   PID — patient identifier (PID.3.1 = patient ID)
+//   ORC — common order (ORC.1 = NW new / CA cancel)
+//   RXO — pharmacy order (RXO.1.1 = drug name, RXO.2 = dose, RXO.4 = unit)
+//   TQ1 — timing/quantity (TQ1.7 = rate in mL/h)
+// -----------------------------------------------------------------------
+
+// Medication → perfusor mapping (case-insensitive partial match)
+var MEDICATION_MAP = [
+  {keywords: ['morfin', 'morphin', 'fentanil', 'fentanyl'],  perfusor: 1},
+  {keywords: ['noradrenal', 'norepinephrin', 'dopamin'],     perfusor: 2},
+  {keywords: ['propofol', 'midazolam', 'ketamin'],           perfusor: 3},
+];
+
+function findPerfusor(drugName) {
+  var name = (drugName || '').toLowerCase();
+  for (var i = 0; i < MEDICATION_MAP.length; i++) {
+    var entry = MEDICATION_MAP[i];
+    for (var j = 0; j < entry.keywords.length; j++) {
+      if (name.indexOf(entry.keywords[j]) >= 0) return entry.perfusor;
+    }
+  }
+  return null;
+}
+
+// Parse HL7 — split into segments
+var segments = {};
+var lines = msg.split('\r');
+for (var i = 0; i < lines.length; i++) {
+  var seg = lines[i];
+  if (seg.length < 3) continue;
+  var name = seg.substring(0, 3);
+  segments[name] = seg.split('|');
+}
+
+// Extract fields
+var msh = segments['MSH'] || [];
+var pid = segments['PID'] || [];
+var orc = segments['ORC'] || [];
+var rxo = segments['RXO'] || [];
+var tq1 = segments['TQ1'] || [];
+
+var orderAction  = orc[1]  || 'NW';                       // NW = new, CA = cancel
+var orderId      = orc[2]  || ('ORD' + new Date().getTime());
+var patientId    = (pid[3] || '').split('^')[0] || 'GIZMO_PATIENT_001';
+var drugRaw      = (rxo[1] || '').split('^')[0];          // RXO.1.1 drug name
+var dose         = parseFloat(rxo[2]) || 0;               // RXO.2 dose
+var doseUnit     = rxo[4] || 'mg';                        // RXO.4 unit
+var rateStr      = tq1[7] || '0';                         // TQ1.7 rate mL/h
+var rate         = parseFloat(rateStr) || 0;
+
+var perfusor = findPerfusor(drugRaw);
+
+if (!perfusor) {
+  logger.warn('PerfusorOrders: unknown medication "' + drugRaw + '" — cannot route');
+  channelMap.put('skip', 'true');
+  return;
+}
+
+logger.info('PerfusorOrders: ' + orderAction + ' ' + drugRaw +
+  ' → perfusor ' + perfusor + ' rate=' + rate + ' mL/h');
+
+channelMap.put('order_id',   orderId);
+channelMap.put('action',     orderAction);
+channelMap.put('perfusor',   perfusor);
+channelMap.put('drug',       drugRaw);
+channelMap.put('dose',       dose);
+channelMap.put('dose_unit',  doseUnit);
+channelMap.put('rate',       rate);
+channelMap.put('patient_id', patientId);
+channelMap.put('skip',       'false');
+          ]]></script>
+        </com.mirth.connect.plugins.javascriptrule.JavaScriptRule>
+      </elements>
+      <inboundDataType>HL7V2</inboundDataType>
+      <outboundDataType>RAW</outboundDataType>
+      <inboundProperties class="com.mirth.connect.plugins.datatypes.hl7v2.HL7v2DataTypeProperties" version="4.4.0">
+        <serializationProperties class="com.mirth.connect.plugins.datatypes.hl7v2.HL7v2SerializationProperties" version="4.4.0">
+          <handleRepetitions>true</handleRepetitions>
+          <handleSubcomponents>true</handleSubcomponents>
+          <useStrictParser>false</useStrictParser>
+          <useStrictValidation>false</useStrictValidation>
+          <stripNamespaces>true</stripNamespaces>
+          <segmentDelimiter>\\r</segmentDelimiter>
+          <convertLineBreaks>true</convertLineBreaks>
+        </serializationProperties>
+        <deserializationProperties class="com.mirth.connect.plugins.datatypes.hl7v2.HL7v2DeserializationProperties" version="4.4.0">
+          <useStrictParser>false</useStrictParser>
+          <useStrictValidation>false</useStrictValidation>
+          <segmentDelimiter>\\r</segmentDelimiter>
+        </deserializationProperties>
+        <batchProperties class="com.mirth.connect.plugins.datatypes.hl7v2.HL7v2BatchProperties" version="4.4.0">
+          <splitType>MSH_Segment</splitType>
+          <batchScript></batchScript>
+        </batchProperties>
+        <responseGenerationProperties class="com.mirth.connect.plugins.datatypes.hl7v2.HL7v2ResponseGenerationProperties" version="4.4.0">
+          <segmentDelimiter>\\r</segmentDelimiter>
+          <successfulACKCode>AA</successfulACKCode>
+          <successfulACKMessage></successfulACKMessage>
+          <errorACKCode>AE</errorACKCode>
+          <errorACKMessage></errorACKMessage>
+          <rejectedACKCode>AR</rejectedACKCode>
+          <rejectedACKMessage></rejectedACKMessage>
+          <msh15ACKAccept>false</msh15ACKAccept>
+          <dateFormat>yyyyMMddHHmmss</dateFormat>
+        </responseGenerationProperties>
+        <responseValidationProperties class="com.mirth.connect.plugins.datatypes.hl7v2.HL7v2ResponseValidationProperties" version="4.4.0">
+          <successfulACKCode>AA,CA</successfulACKCode>
+          <errorACKCode>AE,CE</errorACKCode>
+          <rejectedACKCode>AR,CR</rejectedACKCode>
+          <validateMessageControlId>true</validateMessageControlId>
+          <originalMessageControlId>Destination_Encoded</originalMessageControlId>
+          <originalIdMapVariable></originalIdMapVariable>
+        </responseValidationProperties>
+      </inboundProperties>
+      <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+          <splitType>JavaScript</splitType>
+          <batchScript></batchScript>
+        </batchProperties>
+      </outboundProperties>
+    </transformer>
+
+    <filter version="4.4.0">
+      <elements>
+        <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+          <name>Filter unknown medications</name>
+          <sequenceNumber>0</sequenceNumber>
+          <enabled>true</enabled>
+          <script>return channelMap.get('skip') !== 'true';</script>
+        </com.mirth.connect.plugins.javascriptrule.JavaScriptRule>
+      </elements>
+    </filter>
+    <transportName>MLLP Listener</transportName>
+    <mode>SOURCE</mode>
+    <enabled>true</enabled>
+    <waitForPrevious>true</waitForPrevious>
+  </sourceConnector>
+
+  <destinationConnectors>
+
+    <!-- Destination 1: Write JSON order for order_executor -->
+    <connector version="4.4.0">
+      <metaDataId>1</metaDataId>
+      <name>Write order JSON for order_executor</name>
+      <properties class="com.mirth.connect.connectors.file.FileDispatcherProperties" version="4.4.0">
+        <pluginProperties/>
+        <destinationConnectorProperties version="4.4.0">
+          <queueEnabled>false</queueEnabled>
+          <sendFirst>false</sendFirst>
+          <retryIntervalMillis>5000</retryIntervalMillis>
+          <regenerateTemplate>false</regenerateTemplate>
+          <retryCount>3</retryCount>
+          <rotate>false</rotate>
+          <includeFilterTransformer>false</includeFilterTransformer>
+          <threadCount>1</threadCount>
+          <queueConnectorProperties/>
+          <validateResponse>false</validateResponse>
+          <resourceIds class="linked-hash-map">
+            <entry>
+              <string>Default Resource</string>
+              <string>[Default Resource]</string>
+            </entry>
+          </resourceIds>
+          <queueBufferSize>1000</queueBufferSize>
+        </destinationConnectorProperties>
+        <scheme>FILE</scheme>
+        <host>/data/orders</host>
+        <outputPattern>order_${new Date().getTime()}.json</outputPattern>
+        <anonymous>true</anonymous>
+        <username></username>
+        <password></password>
+        <timeout>10000</timeout>
+        <keepConnectionOpen>false</keepConnectionOpen>
+        <maxIdleTime>0</maxIdleTime>
+        <secure>true</secure>
+        <passive>true</passive>
+        <validateConnection>true</validateConnection>
+        <appendToFile>false</appendToFile>
+        <charsetEncoding>UTF-8</charsetEncoding>
+        <temporary>false</temporary>
+        <binary>false</binary>
+      </properties>
+
+      <transformer version="4.4.0">
+        <elements>
+          <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+            <name>Build order JSON</name>
+            <sequenceNumber>0</sequenceNumber>
+            <enabled>true</enabled>
+            <script><![CDATA[
+// Build the order JSON consumed by order_executor
+// action: NW (new) → set flujo register; CA (cancel) → set flujo = 0
+var action    = channelMap.get('action')    || 'NW';
+var perfusor  = parseInt(channelMap.get('perfusor'), 10);
+var rate      = parseFloat(channelMap.get('rate'))  || 0;
+var dose      = parseFloat(channelMap.get('dose'))  || 0;
+
+var order = {
+  order_id:   channelMap.get('order_id'),
+  patient_id: channelMap.get('patient_id'),
+  action:     action,
+  perfusor:   perfusor,
+  drug:       channelMap.get('drug'),
+  dose:       dose,
+  dose_unit:  channelMap.get('dose_unit'),
+  flujo:      action === 'CA' ? 0 : Math.min(Math.round(rate), 600),
+  timestamp:  new Date().toISOString(),
+};
+
+tmp = JSON.stringify(order, null, 2);
+            ]]></script>
+          </com.mirth.connect.plugins.javascriptrule.JavaScriptRule>
+        </elements>
+        <inboundDataType>RAW</inboundDataType>
+        <outboundDataType>RAW</outboundDataType>
+        <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+            <splitType>JavaScript</splitType>
+            <batchScript></batchScript>
+          </batchProperties>
+        </inboundProperties>
+        <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+            <splitType>JavaScript</splitType>
+            <batchScript></batchScript>
+          </batchProperties>
+        </outboundProperties>
+      </transformer>
+
+      <filter version="4.4.0">
+        <elements/>
+      </filter>
+      <transportName>File Writer</transportName>
+      <mode>DESTINATION</mode>
+      <enabled>true</enabled>
+      <waitForPrevious>true</waitForPrevious>
+    </connector>
+
+    <!-- Destination 2: HL7 ACK back to sender (auto-generated by MLLP layer) -->
+    <!-- Mirth auto-sends AA/AE ACK via MSH-15 — no explicit destination needed -->
+
+  </destinationConnectors>
+
+  <preprocessingScript>return message;</preprocessingScript>
+  <postprocessingScript>return;</postprocessingScript>
+  <deployScript>return;</deployScript>
+  <undeployScript>return;</undeployScript>
+
+  <properties class="com.mirth.connect.donkey.model.channel.ChannelProperties" version="4.4.0">
+    <clearGlobalChannelMap>false</clearGlobalChannelMap>
+    <messageStorageMode>DEVELOPMENT</messageStorageMode>
+    <encryptData>false</encryptData>
+    <encryptAttachments>false</encryptAttachments>
+    <encryptCustomMetaData>false</encryptCustomMetaData>
+    <removeContentOnCompletion>false</removeContentOnCompletion>
+    <removeOnlyFilteredOnCompletion>false</removeOnlyFilteredOnCompletion>
+    <removeAttachmentsOnCompletion>false</removeAttachmentsOnCompletion>
+    <initialState>STARTED</initialState>
+    <storeAttachments>true</storeAttachments>
+    <metaDataColumns/>
+    <archiveEnabled>true</archiveEnabled>
+    <resourceIds class="linked-hash-map">
+      <entry>
+        <string>Default Resource</string>
+        <string>[Default Resource]</string>
+      </entry>
+    </resourceIds>
+    <queueBufferSize>1000</queueBufferSize>
+    <channelDependencies/>
+  </properties>
+
+</channel>

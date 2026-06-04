@@ -4,18 +4,17 @@
 # Usage (run from the gizmo-docker-twin-healthcare root):
 #   docker compose -f docker-compose.yaml -f Mirth_Connector/docker-compose.yml up -d
 #
-# Or standalone (after the parent compose is already running):
+# Or standalone (parent compose must already be running so networks exist):
 #   docker compose -f docker-compose.yml up -d
-#   (networks must already exist — started by the parent compose)
 ##############################################################################
 
 services:
 
   # --------------------------------------------------------------------------
-  # plc_exporter
-  # Polls all 5 PLCs via Modbus TCP every POLL_INTERVAL seconds and writes
-  # a JSON snapshot to the shared plc_data volume.
-  # Sits on level1_plc (10.10.30.19) to reach PLCs directly.
+  # plc_exporter (10.10.30.19 — level1_plc)
+  # Polls all 5 PLCs via Modbus TCP every POLL_INTERVAL seconds and writes:
+  #   plc_data volume   → timestamped snapshots (PLCtoOpenEMR channel)
+  #   plc_latest volume → latest.json overwritten each tick (VitalSignsAlerts)
   # --------------------------------------------------------------------------
   plc_exporter:
     container_name: plc_exporter
@@ -27,10 +26,12 @@ services:
       - NET_ADMIN
     environment:
       OUTPUT_DIR: /data/plc_readings
+      LATEST_DIR: /data/plc_latest
       POLL_INTERVAL: "30"
       MODBUS_TIMEOUT: "5"
     volumes:
       - plc_data:/data/plc_readings
+      - plc_latest:/data/plc_latest
     networks:
       level1_plc:
         ipv4_address: 10.10.30.19
@@ -42,11 +43,50 @@ services:
       - plc_hospital
 
   # --------------------------------------------------------------------------
-  # mirth-connect
-  # NextGen Connect (Mirth Connect) 4.4.1 — integration engine.
-  # Reads JSON files from plc_data volume and transforms them to HL7 / FHIR.
+  # order_executor (10.10.30.20 — level1_plc)
+  # Watches /data/orders/ for JSON order files from the PerfusorOrders channel.
+  # Writes Modbus Holding registers directly to plc_perfusor (10.10.30.14).
+  # plc_cerebro reads those registers every 5 s and sends MQTT actuator commands.
+  #
+  # Full order loop:
+  #   OpenEMR → MLLP:6661 → Mirth PerfusorOrders → /data/orders/
+  #     → order_executor → Modbus write → plc_perfusor
+  #       → plc_cerebro → MQTT → physical perfusor actuator
+  # --------------------------------------------------------------------------
+  order_executor:
+    container_name: order_executor
+    build:
+      context: ./order_executor
+      dockerfile: Dockerfile
+    restart: always
+    cap_add:
+      - NET_ADMIN
+    environment:
+      ORDERS_DIR: /data/orders
+      ERRORS_DIR: /data/orders/errors
+      POLL_INTERVAL: "2"
+      MODBUS_TIMEOUT: "5"
+      PERFUSOR_PLC_IP: "10.10.30.14"
+      PERFUSOR_PLC_PORT: "502"
+      PERFUSOR_SLAVE_ID: "3"
+    volumes:
+      - orders_data:/data/orders
+    networks:
+      level1_plc:
+        ipv4_address: 10.10.30.20
+    depends_on:
+      - plc_perfusor
+
+  # --------------------------------------------------------------------------
+  # mirth-connect (10.10.10.14 — level3_operaciones)
+  # NextGen Connect 4.4.1 — HL7/FHIR integration engine.
   # Admin console: https://localhost:8443  (admin / admin on first start)
-  # Sits on level3_operaciones (10.10.10.14) to reach OpenEMR (10.10.10.16).
+  #
+  # Channels to import after first start:
+  #   mirth/channels/PLCtoOpenEMR.xml       vital signs JSON → HL7 ORU^R01
+  #   mirth/channels/OrthancToOpenEMR.xml   Orthanc DICOM study → HL7 ORU^R01
+  #   mirth/channels/VitalSignsAlerts.xml   threshold alerting → HL7 ORU^R01
+  #   mirth/channels/PerfusorOrders.xml     MLLP:6661 → perfusor order JSON
   # --------------------------------------------------------------------------
   mirth-connect:
     container_name: mirth-connect
@@ -60,12 +100,14 @@ services:
       KEYSTORE_KEYPASS: changeit
     volumes:
       - plc_data:/data/plc_readings:ro
+      - plc_latest:/data/plc_latest:ro
       - hl7_out:/data/hl7_out
+      - orders_data:/data/orders
       - mirth_appdata:/opt/connect/appdata
       - ./mirth/channels:/opt/connect/appdata/channel-backups:ro
     ports:
       - "8443:8443"     # Mirth Connect administrator (HTTPS)
-      - "6661:6661"     # HL7 MLLP listener (optional)
+      - "6661:6661"     # HL7 MLLP listener (PerfusorOrders channel)
     networks:
       level3_operaciones:
         ipv4_address: 10.10.10.14
@@ -73,8 +115,10 @@ services:
       - plc_exporter
 
 volumes:
-  plc_data: {}          # JSON snapshots: plc_exporter writes, mirth reads
-  hl7_out: {}           # HL7 ORU^R01 files staged for OpenEMR
+  plc_data: {}          # Timestamped JSON snapshots (PLCtoOpenEMR reads + deletes)
+  plc_latest: {}        # latest.json overwritten each tick (VitalSignsAlerts reads)
+  hl7_out: {}           # HL7 output files staged for OpenEMR
+  orders_data: {}       # Perfusor orders: Mirth writes, order_executor reads
   mirth_appdata: {}     # Mirth Connect persistent config / Derby DB
 
 networks:

@@ -2,39 +2,58 @@
 
 Integration bridge between the OT/PLC layer, Orthanc PACS, and OpenEMR in the `gizmo-docker-twin-healthcare` digital twin environment.
 
-## Overview
+## Architecture
 
 ```
-PLCs (Modbus TCP, 10.10.30.x)
-        │
-        ▼ every 30 s
- ┌─────────────────┐
- │  plc_exporter   │  Python · level1_plc (10.10.30.19)
- │  (pymodbus)     │  Polls 5 PLCs, writes JSON snapshot
- └────────┬────────┘
-          │  Docker volume: plc_data
-          ▼
- ┌─────────────────────────────────────────────────────────┐
- │                    mirth-connect                        │
- │              NextGen Connect 4.4.1                      │
- │          level3_operaciones (10.10.10.14)               │
- │                                                         │
- │  Channel 1 — PLCtoOpenEMR                               │
- │    File Reader (plc_data) → HL7 ORU^R01 (vital signs)   │
- │    File Writer → /data/hl7_out/                         │
- │    HTTP Sender → OpenEMR FHIR /Observation (disabled)   │
- │                                                         │
- │  Channel 2 — OrthancToOpenEMR                           │
- │    JS Reader polls Orthanc /changes every 30 s          │
- │    New study detected → HL7 ORU^R01 (DICOM reference)   │
- │    File Writer → /data/hl7_out/                         │
- │    HTTP Sender → OpenEMR FHIR /ImagingStudy (disabled)  │
- └─────────────────────────────────────────────────────────┘
-
-TAC scan event (gizmo-brain.py → send_dicom.py):
-  ├─► DICOM C-STORE ──────────────► Orthanc (10.10.10.15:4242)  [direct, unchanged]
-  └─► Orthanc /changes polled ────► Channel 2 detects new study → HL7 → OpenEMR
+┌──────────────────────── level1_plc (10.10.30.x) ────────────────────────┐
+│                                                                          │
+│  plc_signosvitales (10.10.30.15)  plc_perfusor (10.10.30.14)            │
+│  plc_cpap          (10.10.30.13)  plc_tac      (10.10.30.12)            │
+│  plc_hospital      (10.10.30.17)                                         │
+│        │ Modbus TCP                     ▲ Modbus write                   │
+│        ▼ every 30 s                     │                                │
+│  ┌─────────────┐              ┌──────────────────┐                       │
+│  │ plc_exporter│              │  order_executor  │                       │
+│  │ 10.10.30.19 │              │  10.10.30.20     │                       │
+│  └──────┬──────┘              └────────▲─────────┘                       │
+│         │ plc_data + plc_latest vols   │ orders_data vol                 │
+└─────────┼──────────────────────────────┼─────────────────────────────────┘
+          │                              │
+┌─────────┼──────── level3_operaciones (10.10.10.x) ──────────────────────┐
+│         ▼                              │                                 │
+│  ┌──────────────────────────────────────────────────────────────────┐    │
+│  │                    mirth-connect  (10.10.10.14)                  │    │
+│  │                                                                  │    │
+│  │  Ch 1 PLCtoOpenEMR      File Reader → HL7 ORU^R01 vital signs   │    │
+│  │  Ch 2 OrthancToOpenEMR  JS polls Orthanc → HL7 ORU^R01 DICOM    │    │
+│  │  Ch 3 VitalSignsAlerts  JS reads latest.json → alert ORU^R01    │    │
+│  │  Ch 4 PerfusorOrders    MLLP:6661 ORM^O01 → order JSON ─────────┼────┘
+│  └──────────────────────────────┬───────────────────────────────────┘
+│                                 │ hl7_out vol / HTTP FHIR
+│  OpenEMR (10.10.10.16) ◄────────┘    Orthanc (10.10.10.15)
+│
+│  TAC scan (gizmo-brain.py → send_dicom.py):
+│    ├─► DICOM C-STORE ──────────────────────────────► Orthanc :4242
+│    └─► Orthanc /changes polled by Ch 2 ──────────── HL7 → OpenEMR
+└─────────────────────────────────────────────────────────────────────────┘
 ```
+
+## Services
+
+| Container | IP | Network | Role |
+|---|---|---|---|
+| `plc_exporter` | 10.10.30.19 | level1_plc | Polls PLCs every 30 s → JSON |
+| `order_executor` | 10.10.30.20 | level1_plc | Reads orders → Modbus write → perfusor PLC |
+| `mirth-connect` | 10.10.10.14 | level3_operaciones | HL7/FHIR integration hub |
+
+## Channels
+
+| # | Name | Source | Output | Default |
+|---|---|---|---|---|
+| 1 | PLCtoOpenEMR | File Reader `/data/plc_readings/` | HL7 ORU^R01 vital signs | Enabled |
+| 2 | OrthancToOpenEMR | JS polls `http://10.10.10.15:8042/changes` | HL7 ORU^R01 DICOM ref | Enabled |
+| 3 | VitalSignsAlerts | JS reads `/data/plc_latest/latest.json` | HL7 ORU^R01 w/ HH/LL flags | Enabled |
+| 4 | PerfusorOrders | MLLP Listener :6661 ORM^O01 | JSON order → `/data/orders/` | Enabled |
 
 ## Repository structure
 
@@ -43,104 +62,96 @@ Mirth_Connector/
 ├── docker-compose.yml
 ├── plc_exporter/
 │   ├── Dockerfile
-│   ├── requirements.txt            # pymodbus 3.7.4, schedule 1.2.2
-│   ├── devices.py                  # PLC/register definitions (frozen dataclasses)
-│   └── exporter.py                 # Modbus polling loop → JSON writer
+│   ├── requirements.txt
+│   ├── devices.py              PLC/register definitions
+│   └── exporter.py             Modbus polling → plc_data + plc_latest volumes
+├── order_executor/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── order_executor.py       Watches orders volume → Modbus write to perfusor PLC
 └── mirth/
     └── channels/
-        ├── PLCtoOpenEMR.xml        # Channel 1: vital signs JSON → HL7 ORU^R01
-        └── OrthancToOpenEMR.xml    # Channel 2: Orthanc DICOM study → HL7 ORU^R01
+        ├── PLCtoOpenEMR.xml        Channel 1
+        ├── OrthancToOpenEMR.xml    Channel 2
+        ├── VitalSignsAlerts.xml    Channel 3
+        └── PerfusorOrders.xml      Channel 4
 ```
 
-## Channel 1 — PLCtoOpenEMR
+---
 
-Reads JSON snapshots from `plc_exporter` and transforms vital signs to HL7.
+## Channel 3 — VitalSignsAlerts
 
-**PLC devices polled:**
+Evaluates ICU vital signs against clinical thresholds every 30 s. Generates an HL7 ORU^R01 **only when at least one value is out of range** — no alert, no message.
 
-| Container | IP | Slave ID | Data |
-|---|---|---|---|
-| plc_signosvitales | 10.10.30.15 | 4 | Heart rate, BP systolic/diastolic, SpO2, resp. rate, temperature |
-| plc_perfusor | 10.10.30.14 | 3 | Flow × 3, dose × 3, status × 3 |
-| plc_cpap | 10.10.30.13 | 1 | Power, on/off status |
-| plc_tac | 10.10.30.12 | 5 | Status, insert, scan, extract coils |
-| plc_hospital | 10.10.30.17 | 2 | O2 tank, pressures (UCI/OR/TAC), generation panel, filters |
+**Thresholds:**
 
-**JSON snapshot format:**
+| Parameter | LL (critical low) | L (low) | H (high) | HH (critical high) |
+|---|---|---|---|---|
+| Heart rate | < 30 bpm | < 50 | > 120 | > 150 |
+| SpO2 | < 85 % | < 90 | — | — |
+| Systolic BP | < 70 mmHg | < 90 | > 140 | > 180 |
+| Diastolic BP | < 40 mmHg | < 60 | > 95 | > 120 |
+| Temperature | < 35 °C | < 36 | > 38 | > 40 |
+| Respiratory rate | < 5 /min | < 10 | > 25 | > 35 |
 
-```json
-{
-  "schema_version": "1.0",
-  "timestamp": "2026-06-04T21:00:00+00:00",
-  "source": "plc_exporter",
-  "devices": {
-    "plc_signosvitales": {
-      "ip": "10.10.30.15",
-      "slave_id": 4,
-      "readings": {
-        "signosvitales_frecuencia": 72,
-        "signosvitales_presion_baja": 80,
-        "signosvitales_presion_alta": 120,
-        "signosvitales_saturacion": 98,
-        "signosvitales_rate": 16,
-        "signosvitales_temp": 36
-      },
-      "errors": null
-    }
-  }
-}
-```
-
-**Destinations:**
-
-| # | Name | Type | Default |
-|---|---|---|---|
-| 1 | Write HL7 ORU^R01 | File Writer → `/data/hl7_out/` | **Enabled** |
-| 2 | Send to OpenEMR FHIR | HTTP POST → `/fhir/Observation` | **Disabled** |
-
-## Channel 2 — OrthancToOpenEMR
-
-Detects new DICOM studies in Orthanc and sends an HL7 notification to OpenEMR.
-
-**Flow:**
+**HL7 output example (SpO2 critically low):**
 
 ```
-tac_scan coil changes (plc_tac, gizmo-brain.py)
-  └─► send_dicom.py runs on kali-rolling (10.10.30.60)
-        ├─► DICOM C-STORE ──► Orthanc (10.10.10.15:4242)   ← image stored
-        └─► [no change needed to send_dicom.py]
-
-Channel 2 (every 30 s):
-  GET http://10.10.10.15:8042/changes?since={last_seq}
-  └─ ChangeType == NewStudy?
-       └─► GET /studies/{id} → fetch metadata
-             └─► HL7 ORU^R01 with StudyInstanceUID + Orthanc viewer URL
-                   └─► /data/hl7_out/DICOM_ORU_*.hl7
+MSH|^~\&|PLC_ALERTS|HOSPITAL_GIZMO|MIRTH_CONNECT|OPENEMR|20260604210000||ORU^R01|ALERT20260604210000|P|2.5.1|||AL|AL|
+PID|1||GIZMO_PATIENT_001^^^...
+OBR|1||CRITICAL_20260604210000|85353-1^Vital signs panel^LN|||...|||F
+OBX|4|NM|59408-5^Oxygen saturation^LN||87|%|90-100|LL|||F|||20260604210000||LL^CRITICAL
+ZAL|CRITICAL|saturacion=87[LL]|2026-06-04T21:00:00Z
 ```
 
-**HL7 OBX segments generated:**
+---
 
-| OBX | LOINC | Content |
-|---|---|---|
-| 1 | 110180-7 | StudyInstanceUID + Orthanc endpoint |
-| 2 | 59847-4 | Modality (CT / MR / XA) |
-| 3 | 32484-8 | Study description |
-| 4 | 113014 | Direct Orthanc viewer URL |
+## Channel 4 — PerfusorOrders (MLLP Hub)
 
-**Destinations:**
+Receives HL7 ORM^O01 from OpenEMR on port **6661** and routes infusion orders to the perfusor PLCs.
 
-| # | Name | Type | Default |
-|---|---|---|---|
-| 1 | Write HL7 ORU^R01 DICOM | File Writer → `/data/hl7_out/` | **Enabled** |
-| 2 | Send to OpenEMR FHIR | HTTP POST → `/fhir/ImagingStudy` | **Disabled** |
+**Medication → Perfusor mapping:**
 
-The channel uses `globalChannelMap` to track the last processed Orthanc change sequence, so it never reprocesses studies across restarts.
+| Perfusor | Medications |
+|---|---|
+| 1 | Morfina, Morphine, Fentanilo, Fentanyl |
+| 2 | Noradrenalina, Norepinephrine, Dopamina |
+| 3 | Propofol, Midazolam, Ketamina |
+
+**Order execution flow:**
+
+```
+OpenEMR creates medication order
+  └─► HL7 ORM^O01 via MLLP → Mirth :6661
+        └─► PerfusorOrders transformer parses:
+              ORC.1 = NW (new) / CA (cancel)
+              RXO.1 = drug name → maps to perfusor 1/2/3
+              TQ1.7 = rate mL/h → flujo value
+        └─► /data/orders/order_{ts}.json
+              └─► order_executor every 2 s:
+                    write_register(perfusor_flujo, rate)
+                    └─► plc_cerebro reads every 5 s
+                          └─► MQTT command to physical actuator
+```
+
+**Test order from command line:**
+
+```bash
+# Requires netcat (nc) and MLLP framing
+printf "\x0bMSH|^~\&|OPENEMR|HOSPITAL|MIRTH|PLC|$(date +%Y%m%d%H%M%S)||ORM^O01|TEST001|P|2.5.1\rPID|1||GIZMO_PATIENT_001\rORC|NW|ORD001\rRXO|Morfina^^LOCAL|10|mg|IV\rTQ1|1|||30|mL/h\x1c\r" | nc 127.0.0.1 6661
+```
+
+**Cancel order:**
+```bash
+# ORC.1 = CA → sets flujo = 0 (stops infusion)
+printf "\x0bMSH|...|ORM^O01|TEST002|P|2.5.1\rORC|CA|ORD001\rRXO|Morfina^^LOCAL\rTQ1|1|||0|mL/h\x1c\r" | nc 127.0.0.1 6661
+```
+
+---
 
 ## Quick start
 
 ### Prerequisites
-
-The parent environment must be running first:
 
 ```bash
 cd gizmo-docker-twin-healthcare
@@ -150,68 +161,63 @@ docker compose up -d
 ### Start the Mirth connector
 
 ```bash
-# From the gizmo-docker-twin-healthcare root:
+# From gizmo-docker-twin-healthcare root:
 docker compose -f docker-compose.yaml -f Mirth_Connector/docker-compose.yml up -d
 ```
 
-Or from inside this folder (parent networks must already exist):
+### Import all Mirth channels
+
+1. Open `https://localhost:8443` (default: `admin / admin`)
+2. **Channels → Import Channel**, import in order:
+   1. `mirth/channels/PLCtoOpenEMR.xml`
+   2. `mirth/channels/OrthancToOpenEMR.xml`
+   3. `mirth/channels/VitalSignsAlerts.xml`
+   4. `mirth/channels/PerfusorOrders.xml`
+3. Deploy all channels
+
+### Verify
 
 ```bash
-docker compose up -d
-```
-
-### Import Mirth Connect channels
-
-1. Open the Mirth Connect administrator: `https://localhost:8443`
-2. Default credentials on first start: `admin / admin` (change immediately)
-3. Go to **Channels → Import Channel**
-4. Import both channels:
-   - `mirth/channels/PLCtoOpenEMR.xml`
-   - `mirth/channels/OrthancToOpenEMR.xml`
-5. Deploy both channels
-
-### Verify plc_exporter
-
-```bash
+# plc_exporter polling
 docker logs plc_exporter -f
-# 2026-06-04 21:00:00 INFO plc_exporter: Polling plc_signosvitales (10.10.30.15)
-# 2026-06-04 21:00:00 INFO plc_exporter: Snapshot written: plc_snapshot_20260604T210000Z.json
-```
 
-### Trigger a TAC scan and verify the DICOM channel
+# order_executor watching orders
+docker logs order_executor -f
 
-```bash
-# Trigger the scan from RapidSCADA or directly via Modbus
-# Then check Orthanc received the study:
-curl http://localhost:8042/studies
-
-# Check Mirth detected it (Mirth admin → Channel 2 → Dashboard)
-# Check the HL7 output:
+# Check HL7 output (all channels write here)
 docker exec mirth-connect ls /data/hl7_out/
+
+# Check orders volume
+docker exec order_executor ls /data/orders/
 ```
 
-## Connecting to OpenEMR
+## Enabling OpenEMR FHIR integration
 
-When ready to enable the FHIR push for either channel:
+All channels have a disabled HTTP Sender destination pre-configured for `10.10.10.16`. When ready:
 
-1. In the Mirth Connect administrator, edit the channel
-2. Enable **Destination 2** (HTTP Sender)
-3. Verify credentials match the OpenEMR `admin` account
-4. Redeploy the channel
+1. Enable **Destination 2** in any channel
+2. Ensure OpenEMR REST API is enabled: `Administration → Globals → Connectors`
+3. Redeploy the channel
 
-OpenEMR FHIR API base: `http://10.10.10.16/apis/default/fhir/`
+## Environment variables
 
-> Note: OpenEMR requires OAuth2 for the FHIR API in production. For the lab,
-> basic auth is sufficient if the REST API is configured in
-> `Administration → Globals → Connectors`.
-
-## Environment variables — plc_exporter
+**plc_exporter:**
 
 | Variable | Default | Description |
 |---|---|---|
-| `OUTPUT_DIR` | `/data/plc_readings` | Directory for JSON snapshots |
+| `OUTPUT_DIR` | `/data/plc_readings` | Timestamped snapshots |
+| `LATEST_DIR` | `/data/plc_latest` | Overwritten latest.json |
 | `POLL_INTERVAL` | `30` | Seconds between polls |
-| `MODBUS_TIMEOUT` | `5` | Modbus TCP timeout (seconds) |
+| `MODBUS_TIMEOUT` | `5` | Modbus TCP timeout |
+
+**order_executor:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `ORDERS_DIR` | `/data/orders` | Directory to watch |
+| `POLL_INTERVAL` | `2` | Check interval (seconds) |
+| `PERFUSOR_PLC_IP` | `10.10.30.14` | Perfusor PLC address |
+| `PERFUSOR_SLAVE_ID` | `3` | Modbus slave ID |
 
 ## Related repository
 

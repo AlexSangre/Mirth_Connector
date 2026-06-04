@@ -1,11 +1,13 @@
 """
-plc_exporter — polls all Modbus PLCs at POLL_INTERVAL and writes
-a JSON snapshot to OUTPUT_DIR for Mirth Connect to pick up.
+plc_exporter — polls all Modbus PLCs at POLL_INTERVAL and writes:
+  - A timestamped JSON snapshot to OUTPUT_DIR (consumed by PLCtoOpenEMR channel)
+  - An overwritten latest.json to LATEST_DIR  (read by VitalSignsAlerts channel)
 
 Environment variables:
-  OUTPUT_DIR      Directory where JSON snapshots are written  (default: /data/plc_readings)
-  POLL_INTERVAL   Polling cadence in seconds                  (default: 30)
-  MODBUS_TIMEOUT  Modbus TCP connection timeout in seconds    (default: 5)
+  OUTPUT_DIR      Directory for timestamped snapshots  (default: /data/plc_readings)
+  LATEST_DIR      Directory for latest.json            (default: /data/plc_latest)
+  POLL_INTERVAL   Polling cadence in seconds           (default: 30)
+  MODBUS_TIMEOUT  Modbus TCP connection timeout        (default: 5)
 """
 from __future__ import annotations
 
@@ -31,6 +33,7 @@ logging.basicConfig(
 log = logging.getLogger("plc_exporter")
 
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "/data/plc_readings"))
+LATEST_DIR = Path(os.getenv("LATEST_DIR", "/data/plc_latest"))
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "30"))
 MODBUS_TIMEOUT = int(os.getenv("MODBUS_TIMEOUT", "5"))
 
@@ -92,10 +95,17 @@ def poll_and_write() -> None:
             **result,
         }
 
+    payload = json.dumps(snapshot, indent=2)
+
+    # timestamped file — consumed (and deleted) by PLCtoOpenEMR channel
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     output_file = OUTPUT_DIR / f"plc_snapshot_{timestamp_file}.json"
-    output_file.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
+    output_file.write_text(payload, encoding="utf-8")
     log.info("Snapshot written: %s", output_file.name)
+
+    # latest.json — overwritten every tick, read by VitalSignsAlerts channel
+    LATEST_DIR.mkdir(parents=True, exist_ok=True)
+    (LATEST_DIR / "latest.json").write_text(payload, encoding="utf-8")
 
 
 def _run_threaded(fn: Any) -> None:
