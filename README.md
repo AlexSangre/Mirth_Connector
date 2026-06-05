@@ -1,4 +1,4 @@
-# Mirth Connector — Gizmo Healthcare Digital Twin
+# Mirth Connector — Healthcare Digital
 
 Integration bridge between the OT/PLC layer, Orthanc PACS, and OpenEMR in the `gizmo-docker-twin-healthcare` digital twin environment.
 
@@ -13,7 +13,7 @@ Integration bridge between the OT/PLC layer, Orthanc PACS, and OpenEMR in the `g
 │        │ Modbus TCP                     ▲ Modbus write                   │
 │        ▼ every 30 s                     │                                │
 │  ┌─────────────┐              ┌──────────────────┐                       │
-│  │ plc_exporter│              │  order_executor  │                       │
+│  │ exporter    │              │  order_executor  │                       │
 │  │ 10.10.30.19 │              │  10.10.30.20     │                       │
 │  └──────┬──────┘              └────────▲─────────┘                       │
 │         │ plc_data + plc_latest vols   │ orders_data vol                 │
