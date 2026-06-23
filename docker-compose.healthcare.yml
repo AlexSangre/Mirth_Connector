@@ -1,0 +1,95 @@
+##############################################################################
+# Mirth Connector — healthcare-v2 integration overlay
+#
+# Bridges healthcare-v2 REST APIs (CRRT, CPAP, Vital Signs) into Mirth Connect
+# via device_exporter. The PLC channels (PLCtoOpenEMR, VitalSignsAlerts,
+# OrthancToOpenEMR, PerfusorOrders) belong to the Gizmo/PLC stack and must
+# NOT be imported or activated in this environment.
+#
+# ── Startup ─────────────────────────────────────────────────────────────────
+#
+#   1. Start healthcare-v2 first (creates the medical-vlan network):
+#        cd D:\ProozacConn\RepositoriosGithub\healthcare-v2
+#        docker compose up -d
+#
+#   2. Start Mirth + device_exporter:
+#        cd D:\ProozacConn\RepositoriosGithub\Mirth_Connector
+#        docker compose -f docker-compose.yml -f docker-compose.healthcare.yml up -d mirth-connect device_exporter
+#
+# ── Mirth channels to import (https://localhost:8443) ───────────────────────
+#
+#   IMPORT ONLY these — everything inside mirth/channels/healthcare/:
+#     VitalsMonitorToHL7.xml   vitals_snapshot_*.json    → VITALS_ORU_*.hl7
+#     CPAPtoHL7.xml            cpap_snapshot_*.json      → CPAP_ORU_*.hl7
+#     CRRTtoHL7.xml            crrt_snapshot_*.json      → CRRT_ORU_*.hl7
+#     InfusionPumpToHL7.xml    infusion_snapshot_*.json  → INFUSION_ORU_*.hl7
+#
+#   DO NOT import mirth/channels/*.xml  (PLCtoOpenEMR, VitalSignsAlerts, etc.)
+#   Those channels are for the Gizmo/PLC environment and will not receive data here.
+#
+# ── Adding a new device ──────────────────────────────────────────────────────
+#
+#   1. devices.py       → add _normalize_<device>() + DeviceConfig entry in DEVICES
+#   2. This file        → add <DEVICE>_URL env var under "Registered devices"
+#   3. New channel XML  → create mirth/channels/healthcare/<Device>toHL7.xml
+#                         Copy any existing channel as reference; change only:
+#                           <fileFilter>{device}_snapshot_*.json</fileFilter>
+#                           <outputPattern>{DEVICE}_ORU_*.hl7</outputPattern>
+#                           The JS transformer (parse key + OBX segments)
+#
+##############################################################################
+
+services:
+
+  # --------------------------------------------------------------------------
+  # device_exporter (10.10.30.25 — medical-vlan)
+  # Polls the registered healthcare-v2 REST APIs every POLL_INTERVAL seconds
+  # and writes normalised JSON snapshots to the shared Mirth volumes.
+  # Each entry in devices.py maps to one snapshot file consumed by its channel:
+  #   vitals_snapshot_*.json    → mirth/channels/healthcare/VitalsMonitorToHL7.xml
+  #   cpap_snapshot_*.json      → mirth/channels/healthcare/CPAPtoHL7.xml
+  #   crrt_snapshot_*.json      → mirth/channels/healthcare/CRRTtoHL7.xml
+  #   infusion_snapshot_*.json  → mirth/channels/healthcare/InfusionPumpToHL7.xml
+  # --------------------------------------------------------------------------
+  device_exporter:
+    container_name: device_exporter
+    build:
+      context: ./device_exporter
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      # ── Registered devices (must match DeviceConfig.url_env in devices.py) ──
+      VITALS_URL:        "http://10.10.30.12:8000"
+      CPAP_URL:          "http://10.10.30.11:8000"
+      CRRT_URL:          "http://10.10.30.10:8000"
+      INFUSION_PUMP_URL: "http://10.10.30.13:8000"
+      # Add new devices here, e.g.:
+      #   ECG_URL: "http://10.10.30.14:8000"
+      # ── Shared config ────────────────────────────────────────────────────────
+      OUTPUT_DIR:    /data/plc_readings
+      LATEST_DIR:    /data/plc_latest
+      POLL_INTERVAL: "30"
+      HTTP_TIMEOUT:  "5"
+    volumes:
+      - plc_data:/data/plc_readings
+      - plc_latest:/data/plc_latest
+    networks:
+      medical-vlan:
+        ipv4_address: 10.10.30.25
+
+  # Override mirth-connect to depend on device_exporter instead of plc_exporter
+  # when running in the healthcare-v2 context.
+  mirth-connect:
+    depends_on:
+      - device_exporter
+
+volumes:
+  plc_data:
+  plc_latest:
+  hl7_out:
+  mirth_appdata:
+
+networks:
+  medical-vlan:
+    external: true
+    name: medical-vlan

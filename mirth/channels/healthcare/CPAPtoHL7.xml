@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Mirth Connect channel: CPAP Simulator → HL7 v2 ORU^R01
+  --------------------------------------------------------
+  Source      : File Reader — reads cpap_snapshot_*.json from /data/plc_readings/
+                Written by device_exporter polling the healthcare-v2 CPAP API.
+  Transformer : JavaScript — maps CPAPState to HL7 v2.5.1 ORU^R01
+  Destination : File Writer — /data/hl7_out/CPAP_ORU_*.hl7
+
+  OBX codes used (LOINC where standardised, LOCAL otherwise):
+    76222-9        Airway pressure goal [Ventilator]           cm[H2O]
+    CPAP-ACT-PRESS Actual airway pressure                      cm[H2O]  LOCAL
+    20112-0        Tidal volume Exhaled [Volume] Pulmonary     mL
+    3150-0         Inhaled oxygen concentration                %
+    33438-3        Breath rate machine [#/min] Ventilator      /min
+    CPAP-LEAK      Estimated mask leak                         %        LOCAL
+    CPAP-STATUS    Therapy status (running/standby/stopped)    ST       LOCAL
+
+  Import via: Mirth Connect Administrator → Channels → Import Channel
+-->
+<channel version="4.4.0">
+  <id>e2f3a4b5-c6d7-8901-efab-223344556677</id>
+  <nextMetaDataId>2</nextMetaDataId>
+  <name>CPAP to HL7</name>
+  <description>Reads CPAP device snapshots from the healthcare-v2 CPAP Simulator REST API (via device_exporter) and transforms therapy parameters to HL7 v2.5.1 ORU^R01 messages.</description>
+  <enabled>true</enabled>
+  <lastModified>
+    <time>1750636800000</time>
+    <timezone>UTC</timezone>
+  </lastModified>
+  <revision>1</revision>
+
+  <sourceConnector version="4.4.0">
+    <metaDataId>0</metaDataId>
+    <name>sourceConnector</name>
+    <properties class="com.mirth.connect.connectors.file.FileReceiverProperties" version="4.4.0">
+      <pluginProperties/>
+      <sourceConnectorProperties version="4.4.0">
+        <responseVariable>None</responseVariable>
+        <queueOffload>false</queueOffload>
+        <respondAfterProcessing>true</respondAfterProcessing>
+        <processBatch>false</processBatch>
+        <firstResponse>false</firstResponse>
+        <processingThreads>1</processingThreads>
+        <resourceIds class="linked-hash-map">
+          <entry><string>Default Resource</string><string>[Default Resource]</string></entry>
+        </resourceIds>
+        <queueBufferSize>1000</queueBufferSize>
+      </sourceConnectorProperties>
+      <scheme>FILE</scheme>
+      <host>/data/plc_readings</host>
+      <fileFilter>cpap_snapshot_*.json</fileFilter>
+      <regex>false</regex>
+      <directoryRecursion>false</directoryRecursion>
+      <ignoreDot>true</ignoreDot>
+      <anonymous>true</anonymous>
+      <username></username>
+      <password></password>
+      <timeout>10000</timeout>
+      <secure>true</secure>
+      <passive>true</passive>
+      <validateConnection>true</validateConnection>
+      <afterProcessingAction>DELETE</afterProcessingAction>
+      <moveToDirectory></moveToDirectory>
+      <moveToFileName></moveToFileName>
+      <errorsDirectory>/data/plc_errors</errorsDirectory>
+      <errorsFileName></errorsFileName>
+      <checkFileAge>true</checkFileAge>
+      <fileAge>2000</fileAge>
+      <fileSizeMinimum>0</fileSizeMinimum>
+      <fileSizeMaximum>0</fileSizeMaximum>
+      <ignoreFileSizeMaximum>true</ignoreFileSizeMaximum>
+      <sortBy>date</sortBy>
+      <binary>false</binary>
+      <charsetEncoding>UTF-8</charsetEncoding>
+    </properties>
+
+    <transformer version="4.4.0">
+      <elements>
+        <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+          <name>Parse CPAP snapshot</name>
+          <sequenceNumber>0</sequenceNumber>
+          <enabled>true</enabled>
+          <script><![CDATA[
+var snapshot = JSON.parse(msg);
+channelMap.put('ts', snapshot.timestamp || new Date().toISOString());
+
+var cpap = snapshot.devices &&
+           snapshot.devices.cpap &&
+           snapshot.devices.cpap.readings
+         ? snapshot.devices.cpap.readings
+         : {};
+
+channelMap.put('cpap', cpap);
+logger.info('CPAP snapshot parsed: ' + snapshot.timestamp +
+            ' | status=' + (cpap.therapy_status || 'unknown'));
+          ]]></script>
+        </com.mirth.connect.plugins.javascriptrule.JavaScriptRule>
+      </elements>
+      <inboundDataType>RAW</inboundDataType>
+      <outboundDataType>RAW</outboundDataType>
+      <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+          <splitType>JavaScript</splitType><batchScript></batchScript>
+        </batchProperties>
+      </inboundProperties>
+      <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+          <splitType>JavaScript</splitType><batchScript></batchScript>
+        </batchProperties>
+      </outboundProperties>
+    </transformer>
+    <filter version="4.4.0"><elements/></filter>
+    <transportName>File Reader</transportName>
+    <mode>SOURCE</mode>
+    <enabled>true</enabled>
+    <waitForPrevious>true</waitForPrevious>
+  </sourceConnector>
+
+  <destinationConnectors>
+    <connector version="4.4.0">
+      <metaDataId>1</metaDataId>
+      <name>Write CPAP HL7 ORU^R01</name>
+      <properties class="com.mirth.connect.connectors.file.FileDispatcherProperties" version="4.4.0">
+        <pluginProperties/>
+        <destinationConnectorProperties version="4.4.0">
+          <queueEnabled>false</queueEnabled>
+          <sendFirst>false</sendFirst>
+          <retryIntervalMillis>5000</retryIntervalMillis>
+          <regenerateTemplate>false</regenerateTemplate>
+          <retryCount>3</retryCount>
+          <rotate>false</rotate>
+          <includeFilterTransformer>false</includeFilterTransformer>
+          <threadCount>1</threadCount>
+          <queueConnectorProperties/>
+          <validateResponse>false</validateResponse>
+          <resourceIds class="linked-hash-map">
+            <entry><string>Default Resource</string><string>[Default Resource]</string></entry>
+          </resourceIds>
+          <queueBufferSize>1000</queueBufferSize>
+        </destinationConnectorProperties>
+        <scheme>FILE</scheme>
+        <host>/data/hl7_out</host>
+        <outputPattern>CPAP_ORU_${new Date().getTime()}.hl7</outputPattern>
+        <anonymous>true</anonymous>
+        <username></username>
+        <password></password>
+        <timeout>10000</timeout>
+        <keepConnectionOpen>false</keepConnectionOpen>
+        <maxIdleTime>0</maxIdleTime>
+        <secure>true</secure>
+        <passive>true</passive>
+        <validateConnection>true</validateConnection>
+        <appendToFile>false</appendToFile>
+        <charsetEncoding>UTF-8</charsetEncoding>
+        <temporary>false</temporary>
+        <binary>false</binary>
+      </properties>
+
+      <transformer version="4.4.0">
+        <elements>
+          <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+            <name>Build HL7 ORU^R01 — CPAP therapy parameters</name>
+            <sequenceNumber>0</sequenceNumber>
+            <enabled>true</enabled>
+            <script><![CDATA[
+// -----------------------------------------------------------------------
+// HL7 v2.5.1 ORU^R01 — CPAP Simulator (healthcare-v2)
+//
+// OBX codes:
+//   76222-9        Airway pressure goal [Ventilator]      cm[H2O]
+//   CPAP-ACT-PRESS Actual airway pressure                 cm[H2O]  LOCAL
+//   20112-0        Tidal volume Exhaled                   mL
+//   3150-0         Inhaled O2 concentration               %
+//   33438-3        Breath rate machine                    /min
+//   CPAP-LEAK      Estimated mask leak                    %        LOCAL
+// -----------------------------------------------------------------------
+var c  = channelMap.get('cpap') || {};
+var ts = channelMap.get('ts')   || new Date().toISOString();
+
+var hl7ts = ts.replace(/[-:T]/g,'').substring(0,14);
+var msgId = 'CPAP' + hl7ts;
+
+function v(field) {
+  var val = c[field];
+  return (val !== null && val !== undefined) ? val : '';
+}
+
+function obx(seq, code, name, system, value, unit, refRange) {
+  return 'OBX|' + seq + '|NM|' + code + '^' + name + '^' + system + '||' +
+    value + '|' + unit + '|' + refRange + '||||F|||' + hl7ts;
+}
+
+var lines = [
+  'MSH|^~\\&|CPAP_DEVICE|HOSPITAL_ICU|MIRTH_CONNECT|OPENEMR|' + hl7ts +
+    '||ORU^R01^ORU_R01|' + msgId + '|P|2.5.1|||AL|AL|',
+  'PID|1||PATIENT_001^^^HOSPITAL_ICU&HOSPITAL&L||Paciente^ICU||19800101|U|',
+  // OBR: CPAP therapy panel — using local code; no standard LOINC panel for CPAP
+  'OBR|1|||CPAP-PANEL^CPAP Therapy Parameters^LOCAL|||' + hl7ts + '|||||||||||||||F',
+  // Therapy mode as a coded element (ST type)
+  'OBX|1|ST|CPAP-MODE^Therapy mode^LOCAL||' + v('mode') + '||||||F|||' + hl7ts,
+  // Therapy status
+  'OBX|2|ST|CPAP-STATUS^Therapy status^LOCAL||' + v('therapy_status') + '||||||F|||' + hl7ts,
+  // Clinical parameters
+  obx(3, '76222-9',        'Airway pressure goal',     'LN',    v('pressure_set_cmh2o'),    'cm[H2O]', '4-20'),
+  obx(4, 'CPAP-ACT-PRESS', 'Actual airway pressure',   'LOCAL', v('actual_pressure_cmh2o'), 'cm[H2O]', ''),
+  obx(5, '20112-0',        'Tidal volume exhaled',      'LN',    v('measured_tidal_vol_ml'), 'mL',      '200-800'),
+  obx(6, '3150-0',         'Inhaled O2 concentration',  'LN',    v('fio2_set_pct'),          '%',       '21-100'),
+  obx(7, '33438-3',        'Breath rate machine',       'LN',    v('respiratory_rate_bpm'),  '/min',    '8-30'),
+  obx(8, 'CPAP-LEAK',      'Estimated mask leak',       'LOCAL', v('leak_percentage'),       '%',       '0-24'),
+];
+
+tmp = lines.join('\r');
+            ]]></script>
+          </com.mirth.connect.plugins.javascriptrule.JavaScriptRule>
+        </elements>
+        <inboundDataType>RAW</inboundDataType>
+        <outboundDataType>RAW</outboundDataType>
+        <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+            <splitType>JavaScript</splitType><batchScript></batchScript>
+          </batchProperties>
+        </inboundProperties>
+        <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+            <splitType>JavaScript</splitType><batchScript></batchScript>
+          </batchProperties>
+        </outboundProperties>
+      </transformer>
+      <filter version="4.4.0"><elements/></filter>
+      <transportName>File Writer</transportName>
+      <mode>DESTINATION</mode>
+      <enabled>true</enabled>
+      <waitForPrevious>true</waitForPrevious>
+    </connector>
+  </destinationConnectors>
+
+  <preprocessingScript>return message;</preprocessingScript>
+  <postprocessingScript>return;</postprocessingScript>
+  <deployScript>return;</deployScript>
+  <undeployScript>return;</undeployScript>
+
+  <properties class="com.mirth.connect.donkey.model.channel.ChannelProperties" version="4.4.0">
+    <clearGlobalChannelMap>true</clearGlobalChannelMap>
+    <messageStorageMode>DEVELOPMENT</messageStorageMode>
+    <encryptData>false</encryptData>
+    <encryptAttachments>false</encryptAttachments>
+    <encryptCustomMetaData>false</encryptCustomMetaData>
+    <removeContentOnCompletion>false</removeContentOnCompletion>
+    <removeOnlyFilteredOnCompletion>false</removeOnlyFilteredOnCompletion>
+    <removeAttachmentsOnCompletion>false</removeAttachmentsOnCompletion>
+    <initialState>STARTED</initialState>
+    <storeAttachments>true</storeAttachments>
+    <metaDataColumns/>
+    <archiveEnabled>true</archiveEnabled>
+    <resourceIds class="linked-hash-map">
+      <entry><string>Default Resource</string><string>[Default Resource]</string></entry>
+    </resourceIds>
+    <queueBufferSize>1000</queueBufferSize>
+    <channelDependencies/>
+  </properties>
+
+</channel>

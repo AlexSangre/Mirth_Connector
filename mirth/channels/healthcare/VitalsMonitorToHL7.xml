@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Mirth Connect channel: Vital Signs Monitor → HL7 v2 ORU^R01
+  -------------------------------------------------------------
+  Source      : File Reader — reads vitals_snapshot_*.json from /data/plc_readings/
+                Written by device_exporter polling the healthcare-v2 Vital Signs API.
+  Transformer : JavaScript — maps PatientMonitor snapshot to HL7 v2.5.1 ORU^R01
+  Destination : File Writer — /data/hl7_out/VITALS_ORU_*.hl7
+
+  OBX LOINC codes used:
+    8867-4   Heart rate          /min
+    8480-6   Systolic BP         mm[Hg]
+    8462-4   Diastolic BP        mm[Hg]
+    59408-5  Oxygen saturation   %
+    9279-1   Respiratory rate    /min
+    8310-5   Body temperature    Cel
+
+  Import via: Mirth Connect Administrator → Channels → Import Channel
+-->
+<channel version="4.4.0">
+  <id>d1e2f3a4-b5c6-7890-defa-112233445566</id>
+  <nextMetaDataId>2</nextMetaDataId>
+  <name>Vitals Monitor to HL7</name>
+  <description>Reads vital signs snapshots from the healthcare-v2 PatientMonitor REST API (via device_exporter) and transforms them to HL7 v2.5.1 ORU^R01 messages for hospital integration.</description>
+  <enabled>true</enabled>
+  <lastModified>
+    <time>1750636800000</time>
+    <timezone>UTC</timezone>
+  </lastModified>
+  <revision>1</revision>
+
+  <sourceConnector version="4.4.0">
+    <metaDataId>0</metaDataId>
+    <name>sourceConnector</name>
+    <properties class="com.mirth.connect.connectors.file.FileReceiverProperties" version="4.4.0">
+      <pluginProperties/>
+      <sourceConnectorProperties version="4.4.0">
+        <responseVariable>None</responseVariable>
+        <queueOffload>false</queueOffload>
+        <respondAfterProcessing>true</respondAfterProcessing>
+        <processBatch>false</processBatch>
+        <firstResponse>false</firstResponse>
+        <processingThreads>1</processingThreads>
+        <resourceIds class="linked-hash-map">
+          <entry><string>Default Resource</string><string>[Default Resource]</string></entry>
+        </resourceIds>
+        <queueBufferSize>1000</queueBufferSize>
+      </sourceConnectorProperties>
+      <scheme>FILE</scheme>
+      <host>/data/plc_readings</host>
+      <fileFilter>vitals_snapshot_*.json</fileFilter>
+      <regex>false</regex>
+      <directoryRecursion>false</directoryRecursion>
+      <ignoreDot>true</ignoreDot>
+      <anonymous>true</anonymous>
+      <username></username>
+      <password></password>
+      <timeout>10000</timeout>
+      <secure>true</secure>
+      <passive>true</passive>
+      <validateConnection>true</validateConnection>
+      <afterProcessingAction>DELETE</afterProcessingAction>
+      <moveToDirectory></moveToDirectory>
+      <moveToFileName></moveToFileName>
+      <errorsDirectory>/data/plc_errors</errorsDirectory>
+      <errorsFileName></errorsFileName>
+      <checkFileAge>true</checkFileAge>
+      <fileAge>2000</fileAge>
+      <fileSizeMinimum>0</fileSizeMinimum>
+      <fileSizeMaximum>0</fileSizeMaximum>
+      <ignoreFileSizeMaximum>true</ignoreFileSizeMaximum>
+      <sortBy>date</sortBy>
+      <binary>false</binary>
+      <charsetEncoding>UTF-8</charsetEncoding>
+    </properties>
+
+    <transformer version="4.4.0">
+      <elements>
+        <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+          <name>Parse vitals snapshot</name>
+          <sequenceNumber>0</sequenceNumber>
+          <enabled>true</enabled>
+          <script><![CDATA[
+var snapshot = JSON.parse(msg);
+channelMap.put('ts', snapshot.timestamp || new Date().toISOString());
+
+var vitals = snapshot.devices &&
+             snapshot.devices.plc_signosvitales &&
+             snapshot.devices.plc_signosvitales.readings
+           ? snapshot.devices.plc_signosvitales.readings
+           : {};
+
+channelMap.put('vitals', vitals);
+logger.info('Vitals snapshot parsed: ' + snapshot.timestamp);
+          ]]></script>
+        </com.mirth.connect.plugins.javascriptrule.JavaScriptRule>
+      </elements>
+      <inboundDataType>RAW</inboundDataType>
+      <outboundDataType>RAW</outboundDataType>
+      <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+          <splitType>JavaScript</splitType><batchScript></batchScript>
+        </batchProperties>
+      </inboundProperties>
+      <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+          <splitType>JavaScript</splitType><batchScript></batchScript>
+        </batchProperties>
+      </outboundProperties>
+    </transformer>
+    <filter version="4.4.0"><elements/></filter>
+    <transportName>File Reader</transportName>
+    <mode>SOURCE</mode>
+    <enabled>true</enabled>
+    <waitForPrevious>true</waitForPrevious>
+  </sourceConnector>
+
+  <destinationConnectors>
+    <connector version="4.4.0">
+      <metaDataId>1</metaDataId>
+      <name>Write HL7 ORU^R01</name>
+      <properties class="com.mirth.connect.connectors.file.FileDispatcherProperties" version="4.4.0">
+        <pluginProperties/>
+        <destinationConnectorProperties version="4.4.0">
+          <queueEnabled>false</queueEnabled>
+          <sendFirst>false</sendFirst>
+          <retryIntervalMillis>5000</retryIntervalMillis>
+          <regenerateTemplate>false</regenerateTemplate>
+          <retryCount>3</retryCount>
+          <rotate>false</rotate>
+          <includeFilterTransformer>false</includeFilterTransformer>
+          <threadCount>1</threadCount>
+          <queueConnectorProperties/>
+          <validateResponse>false</validateResponse>
+          <resourceIds class="linked-hash-map">
+            <entry><string>Default Resource</string><string>[Default Resource]</string></entry>
+          </resourceIds>
+          <queueBufferSize>1000</queueBufferSize>
+        </destinationConnectorProperties>
+        <scheme>FILE</scheme>
+        <host>/data/hl7_out</host>
+        <outputPattern>VITALS_ORU_${new Date().getTime()}.hl7</outputPattern>
+        <anonymous>true</anonymous>
+        <username></username>
+        <password></password>
+        <timeout>10000</timeout>
+        <keepConnectionOpen>false</keepConnectionOpen>
+        <maxIdleTime>0</maxIdleTime>
+        <secure>true</secure>
+        <passive>true</passive>
+        <validateConnection>true</validateConnection>
+        <appendToFile>false</appendToFile>
+        <charsetEncoding>UTF-8</charsetEncoding>
+        <temporary>false</temporary>
+        <binary>false</binary>
+      </properties>
+
+      <transformer version="4.4.0">
+        <elements>
+          <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+            <name>Build HL7 ORU^R01 — Vital Signs Monitor</name>
+            <sequenceNumber>0</sequenceNumber>
+            <enabled>true</enabled>
+            <script><![CDATA[
+// -----------------------------------------------------------------------
+// HL7 v2.5.1 ORU^R01 — healthcare-v2 PatientMonitor
+// LOINC codes: 8867-4 HR | 8480-6 SysBP | 8462-4 DiasBP |
+//              59408-5 SpO2 | 9279-1 RR | 8310-5 Temp
+// -----------------------------------------------------------------------
+var v   = channelMap.get('vitals') || {};
+var ts  = channelMap.get('ts')     || new Date().toISOString();
+
+var hl7ts = ts.replace(/[-:T]/g,'').substring(0,14);
+var msgId = 'VITALS' + hl7ts;
+
+function obx(seq, loincCode, loincName, value, unit, refRange) {
+  return 'OBX|' + seq + '|NM|' + loincCode + '^' + loincName + '^LN||' +
+    (value !== null && value !== undefined ? value : '') +
+    '|' + unit + '|' + refRange + '||||F|||' + hl7ts;
+}
+
+var lines = [
+  'MSH|^~\\&|VITALS_MONITOR|HOSPITAL_ICU|MIRTH_CONNECT|OPENEMR|' + hl7ts +
+    '||ORU^R01^ORU_R01|' + msgId + '|P|2.5.1|||AL|AL|',
+  'PID|1||PATIENT_001^^^HOSPITAL_ICU&HOSPITAL&L||Paciente^ICU||19800101|U|',
+  'OBR|1|||85353-1^Vital signs panel^LN|||' + hl7ts + '|||||||||||||||F',
+  obx(1, '8867-4',  'Heart rate',              v.signosvitales_frecuencia,   '/min',   '60-100'),
+  obx(2, '8480-6',  'Systolic blood pressure',  v.signosvitales_presion_alta, 'mm[Hg]', '100-140'),
+  obx(3, '8462-4',  'Diastolic blood pressure', v.signosvitales_presion_baja, 'mm[Hg]', '60-90'),
+  obx(4, '59408-5', 'Oxygen saturation',        v.signosvitales_saturacion,   '%',      '95-100'),
+  obx(5, '9279-1',  'Respiratory rate',         v.signosvitales_rate,         '/min',   '12-20'),
+  obx(6, '8310-5',  'Body temperature',         v.signosvitales_temp,         'Cel',    '36.1-37.2'),
+];
+
+tmp = lines.join('\r');
+            ]]></script>
+          </com.mirth.connect.plugins.javascriptrule.JavaScriptRule>
+        </elements>
+        <inboundDataType>RAW</inboundDataType>
+        <outboundDataType>RAW</outboundDataType>
+        <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+            <splitType>JavaScript</splitType><batchScript></batchScript>
+          </batchProperties>
+        </inboundProperties>
+        <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+            <splitType>JavaScript</splitType><batchScript></batchScript>
+          </batchProperties>
+        </outboundProperties>
+      </transformer>
+      <filter version="4.4.0"><elements/></filter>
+      <transportName>File Writer</transportName>
+      <mode>DESTINATION</mode>
+      <enabled>true</enabled>
+      <waitForPrevious>true</waitForPrevious>
+    </connector>
+  </destinationConnectors>
+
+  <preprocessingScript>return message;</preprocessingScript>
+  <postprocessingScript>return;</postprocessingScript>
+  <deployScript>return;</deployScript>
+  <undeployScript>return;</undeployScript>
+
+  <properties class="com.mirth.connect.donkey.model.channel.ChannelProperties" version="4.4.0">
+    <clearGlobalChannelMap>true</clearGlobalChannelMap>
+    <messageStorageMode>DEVELOPMENT</messageStorageMode>
+    <encryptData>false</encryptData>
+    <encryptAttachments>false</encryptAttachments>
+    <encryptCustomMetaData>false</encryptCustomMetaData>
+    <removeContentOnCompletion>false</removeContentOnCompletion>
+    <removeOnlyFilteredOnCompletion>false</removeOnlyFilteredOnCompletion>
+    <removeAttachmentsOnCompletion>false</removeAttachmentsOnCompletion>
+    <initialState>STARTED</initialState>
+    <storeAttachments>true</storeAttachments>
+    <metaDataColumns/>
+    <archiveEnabled>true</archiveEnabled>
+    <resourceIds class="linked-hash-map">
+      <entry><string>Default Resource</string><string>[Default Resource]</string></entry>
+    </resourceIds>
+    <queueBufferSize>1000</queueBufferSize>
+    <channelDependencies/>
+  </properties>
+
+</channel>

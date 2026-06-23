@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Mirth Connect channel: Infusion Pump Simulator → HL7 v2 ORU^R01
+  ----------------------------------------------------------------
+  Source      : File Reader — reads infusion_snapshot_*.json from /data/plc_readings/
+                Written by device_exporter polling the healthcare-v2 Infusion Pump API.
+  Transformer : JavaScript — maps pump registers to HL7 v2.5.1 ORU^R01
+  Destination : File Writer — /data/hl7_out/INFUSION_ORU_*.hl7
+
+  OBX codes used (all LOCAL — no standardised LOINC panel for IV infusion pumps):
+    PUMP-STATUS    Infusion status (infusing/kvo/standby)   ST
+    PUMP-FLOW      Flow rate                                ml/h
+    PUMP-VTBI      Volume to be infused                     ml
+    PUMP-INFUSED   Volume already infused                   ml
+    PUMP-DROPS     Drop rate sensor                         gotas/min
+    PUMP-PRESS     Line pressure                            kPa
+    PUMP-OCCL-THR  Occlusion threshold                      kPa
+    PUMP-BUBBLE    Air bubble detected                      ST
+    PUMP-DOOR      Door open                                ST
+    PUMP-BAT-V     Battery voltage                          V
+    PUMP-BAT-MIN   Battery remaining autonomy               min
+    PUMP-ALARM     Active alarm flags                       ST
+
+  Import via: Mirth Connect Administrator → Channels → Import Channel
+-->
+<channel version="4.4.0">
+  <id>b5c6d7e8-f9a0-1234-bcde-556677889900</id>
+  <nextMetaDataId>2</nextMetaDataId>
+  <name>Infusion Pump to HL7</name>
+  <description>Reads infusion pump snapshots from the healthcare-v2 Infusion Pump Simulator REST API (via device_exporter) and transforms pump parameters to HL7 v2.5.1 ORU^R01 messages for hospital integration.</description>
+  <enabled>true</enabled>
+  <lastModified>
+    <time>1750636800000</time>
+    <timezone>UTC</timezone>
+  </lastModified>
+  <revision>1</revision>
+
+  <sourceConnector version="4.4.0">
+    <metaDataId>0</metaDataId>
+    <name>sourceConnector</name>
+    <properties class="com.mirth.connect.connectors.file.FileReceiverProperties" version="4.4.0">
+      <pluginProperties/>
+      <sourceConnectorProperties version="4.4.0">
+        <responseVariable>None</responseVariable>
+        <queueOffload>false</queueOffload>
+        <respondAfterProcessing>true</respondAfterProcessing>
+        <processBatch>false</processBatch>
+        <firstResponse>false</firstResponse>
+        <processingThreads>1</processingThreads>
+        <resourceIds class="linked-hash-map">
+          <entry><string>Default Resource</string><string>[Default Resource]</string></entry>
+        </resourceIds>
+        <queueBufferSize>1000</queueBufferSize>
+      </sourceConnectorProperties>
+      <scheme>FILE</scheme>
+      <host>/data/plc_readings</host>
+      <fileFilter>infusion_snapshot_*.json</fileFilter>
+      <regex>false</regex>
+      <directoryRecursion>false</directoryRecursion>
+      <ignoreDot>true</ignoreDot>
+      <anonymous>true</anonymous>
+      <username></username>
+      <password></password>
+      <timeout>10000</timeout>
+      <secure>true</secure>
+      <passive>true</passive>
+      <validateConnection>true</validateConnection>
+      <afterProcessingAction>DELETE</afterProcessingAction>
+      <moveToDirectory></moveToDirectory>
+      <moveToFileName></moveToFileName>
+      <errorsDirectory>/data/plc_errors</errorsDirectory>
+      <errorsFileName></errorsFileName>
+      <checkFileAge>true</checkFileAge>
+      <fileAge>2000</fileAge>
+      <fileSizeMinimum>0</fileSizeMinimum>
+      <fileSizeMaximum>0</fileSizeMaximum>
+      <ignoreFileSizeMaximum>true</ignoreFileSizeMaximum>
+      <sortBy>date</sortBy>
+      <binary>false</binary>
+      <charsetEncoding>UTF-8</charsetEncoding>
+    </properties>
+
+    <transformer version="4.4.0">
+      <elements>
+        <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+          <name>Parse infusion pump snapshot</name>
+          <sequenceNumber>0</sequenceNumber>
+          <enabled>true</enabled>
+          <script><![CDATA[
+var snapshot = JSON.parse(msg);
+channelMap.put('ts', snapshot.timestamp || new Date().toISOString());
+
+var pump = snapshot.devices &&
+           snapshot.devices.infusion_pump &&
+           snapshot.devices.infusion_pump.readings
+         ? snapshot.devices.infusion_pump.readings
+         : {};
+
+channelMap.put('pump', pump);
+logger.info('Infusion pump snapshot parsed: ' + snapshot.timestamp +
+            ' | status=' + (snapshot.devices.infusion_pump.status || 'unknown') +
+            ' | flow=' + (pump.flow_rate_ml_h || 0) + ' ml/h');
+          ]]></script>
+        </com.mirth.connect.plugins.javascriptrule.JavaScriptRule>
+      </elements>
+      <inboundDataType>RAW</inboundDataType>
+      <outboundDataType>RAW</outboundDataType>
+      <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+          <splitType>JavaScript</splitType><batchScript></batchScript>
+        </batchProperties>
+      </inboundProperties>
+      <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+          <splitType>JavaScript</splitType><batchScript></batchScript>
+        </batchProperties>
+      </outboundProperties>
+    </transformer>
+    <filter version="4.4.0"><elements/></filter>
+    <transportName>File Reader</transportName>
+    <mode>SOURCE</mode>
+    <enabled>true</enabled>
+    <waitForPrevious>true</waitForPrevious>
+  </sourceConnector>
+
+  <destinationConnectors>
+    <connector version="4.4.0">
+      <metaDataId>1</metaDataId>
+      <name>Write Infusion Pump HL7 ORU^R01</name>
+      <properties class="com.mirth.connect.connectors.file.FileDispatcherProperties" version="4.4.0">
+        <pluginProperties/>
+        <destinationConnectorProperties version="4.4.0">
+          <queueEnabled>false</queueEnabled>
+          <sendFirst>false</sendFirst>
+          <retryIntervalMillis>5000</retryIntervalMillis>
+          <regenerateTemplate>false</regenerateTemplate>
+          <retryCount>3</retryCount>
+          <rotate>false</rotate>
+          <includeFilterTransformer>false</includeFilterTransformer>
+          <threadCount>1</threadCount>
+          <queueConnectorProperties/>
+          <validateResponse>false</validateResponse>
+          <resourceIds class="linked-hash-map">
+            <entry><string>Default Resource</string><string>[Default Resource]</string></entry>
+          </resourceIds>
+          <queueBufferSize>1000</queueBufferSize>
+        </destinationConnectorProperties>
+        <scheme>FILE</scheme>
+        <host>/data/hl7_out</host>
+        <outputPattern>INFUSION_ORU_${new Date().getTime()}.hl7</outputPattern>
+        <anonymous>true</anonymous>
+        <username></username>
+        <password></password>
+        <timeout>10000</timeout>
+        <keepConnectionOpen>false</keepConnectionOpen>
+        <maxIdleTime>0</maxIdleTime>
+        <secure>true</secure>
+        <passive>true</passive>
+        <validateConnection>true</validateConnection>
+        <appendToFile>false</appendToFile>
+        <charsetEncoding>UTF-8</charsetEncoding>
+        <temporary>false</temporary>
+        <binary>false</binary>
+      </properties>
+
+      <transformer version="4.4.0">
+        <elements>
+          <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+            <name>Build HL7 ORU^R01 — Infusion Pump parameters</name>
+            <sequenceNumber>0</sequenceNumber>
+            <enabled>true</enabled>
+            <script><![CDATA[
+// -----------------------------------------------------------------------
+// HL7 v2.5.1 ORU^R01 — Infusion Pump Simulator (healthcare-v2)
+//
+// All OBX codes are LOCAL — no standardised LOINC panel exists for
+// peristaltic IV infusion pumps at this level of detail.
+// -----------------------------------------------------------------------
+var p  = channelMap.get('pump') || {};
+var ts = channelMap.get('ts')   || new Date().toISOString();
+
+var hl7ts = ts.replace(/[-:T]/g,'').substring(0,14);
+var msgId = 'PUMP' + hl7ts;
+
+function v(field) {
+  var val = p[field];
+  return (val !== null && val !== undefined) ? val : '';
+}
+
+function obxNM(seq, code, name, value, unit, refRange) {
+  return 'OBX|' + seq + '|NM|' + code + '^' + name + '^LOCAL||' +
+    value + '|' + unit + '|' + refRange + '||||F|||' + hl7ts;
+}
+function obxST(seq, code, name, value) {
+  return 'OBX|' + seq + '|ST|' + code + '^' + name + '^LOCAL||' +
+    value + '||||||F|||' + hl7ts;
+}
+
+// alarm_flags is an array — join for HL7 ST field
+var alarmStr = Array.isArray(p.alarm_flags) && p.alarm_flags.length > 0
+  ? p.alarm_flags.join('~')
+  : 'NONE';
+
+var lines = [
+  'MSH|^~\\&|INFUSION_PUMP|HOSPITAL_ICU|MIRTH_CONNECT|OPENEMR|' + hl7ts +
+    '||ORU^R01^ORU_R01|' + msgId + '|P|2.5.1|||AL|AL|',
+  'PID|1||PATIENT_001^^^HOSPITAL_ICU&HOSPITAL&L||Paciente^ICU||19800101|U|',
+  'OBR|1|||PUMP-PANEL^Infusion Pump Parameters^LOCAL|||' + hl7ts + '|||||||||||||||F',
+
+  // Status and mode
+  obxST(1,  'PUMP-STATUS',   'Infusion status',           v('infusion_active') ? (v('kvo_mode') ? 'KVO' : 'INFUSING') : 'STANDBY'),
+
+  // Infusion parameters
+  obxNM(2,  'PUMP-FLOW',     'Flow rate',                 v('flow_rate_ml_h'),     'ml/h',      '0.1-1200'),
+  obxNM(3,  'PUMP-VTBI',     'Volume to be infused',      v('vtbi_ml'),            'ml',         '0-9999'),
+  obxNM(4,  'PUMP-INFUSED',  'Volume infused',            v('infused_volume_ml'),  'ml',         ''),
+
+  // IV set sensor
+  obxNM(5,  'PUMP-DROPS',    'Drop rate',                 v('drop_rate_per_min'),  'gotas/min',  ''),
+
+  // Pressure / occlusion
+  obxNM(6,  'PUMP-PRESS',    'Line pressure',             v('pressure_kpa'),       'kPa',        '30-160'),
+  obxNM(7,  'PUMP-OCCL-THR', 'Occlusion threshold',       v('occlusion_threshold_kpa'), 'kPa',  '80-160'),
+
+  // Air bubble and door
+  obxST(8,  'PUMP-BUBBLE',   'Air bubble detected',       v('bubble_detected') ? 'YES' : 'NO'),
+  obxST(9,  'PUMP-DOOR',     'Door open',                 v('door_open')       ? 'OPEN' : 'CLOSED'),
+
+  // Battery
+  obxNM(10, 'PUMP-BAT-V',    'Battery voltage',           v('battery_voltage_v'),     'V',   '6.8-8.4'),
+  obxNM(11, 'PUMP-BAT-MIN',  'Battery autonomy remaining',v('battery_remaining_min'), 'min', ''),
+
+  // Alarm summary
+  obxST(12, 'PUMP-ALARM',    'Active alarm flags',        alarmStr),
+];
+
+tmp = lines.join('\r');
+            ]]></script>
+          </com.mirth.connect.plugins.javascriptrule.JavaScriptRule>
+        </elements>
+        <inboundDataType>RAW</inboundDataType>
+        <outboundDataType>RAW</outboundDataType>
+        <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+            <splitType>JavaScript</splitType><batchScript></batchScript>
+          </batchProperties>
+        </inboundProperties>
+        <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+            <splitType>JavaScript</splitType><batchScript></batchScript>
+          </batchProperties>
+        </outboundProperties>
+      </transformer>
+      <filter version="4.4.0"><elements/></filter>
+      <transportName>File Writer</transportName>
+      <mode>DESTINATION</mode>
+      <enabled>true</enabled>
+      <waitForPrevious>true</waitForPrevious>
+    </connector>
+  </destinationConnectors>
+
+  <preprocessingScript>return message;</preprocessingScript>
+  <postprocessingScript>return;</postprocessingScript>
+  <deployScript>return;</deployScript>
+  <undeployScript>return;</undeployScript>
+
+  <properties class="com.mirth.connect.donkey.model.channel.ChannelProperties" version="4.4.0">
+    <clearGlobalChannelMap>true</clearGlobalChannelMap>
+    <messageStorageMode>DEVELOPMENT</messageStorageMode>
+    <encryptData>false</encryptData>
+    <encryptAttachments>false</encryptAttachments>
+    <encryptCustomMetaData>false</encryptCustomMetaData>
+    <removeContentOnCompletion>false</removeContentOnCompletion>
+    <removeOnlyFilteredOnCompletion>false</removeOnlyFilteredOnCompletion>
+    <removeAttachmentsOnCompletion>false</removeAttachmentsOnCompletion>
+    <initialState>STARTED</initialState>
+    <storeAttachments>true</storeAttachments>
+    <metaDataColumns/>
+    <archiveEnabled>true</archiveEnabled>
+    <resourceIds class="linked-hash-map">
+      <entry><string>Default Resource</string><string>[Default Resource]</string></entry>
+    </resourceIds>
+    <queueBufferSize>1000</queueBufferSize>
+    <channelDependencies/>
+  </properties>
+
+</channel>
