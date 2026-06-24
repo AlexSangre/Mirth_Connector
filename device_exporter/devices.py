@@ -152,7 +152,7 @@ DEVICES: tuple[DeviceConfig, ...] = (
         url_env      = "INFUSION_PUMP_URL",
         default_url  = "http://10.10.30.13:8000",
         file_prefix  = "infusion_snapshot",
-        endpoint     = "/state",
+        endpoint     = "/pumps/PUMP-GENERIC-001/state",
         status_field = "status",          # "infusing" | "kvo" | "standby" (set by api.py)
         normalize    = _normalize_infusion_pump,
     ),
