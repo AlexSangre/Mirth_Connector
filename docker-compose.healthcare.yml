@@ -77,6 +77,14 @@ services:
       medical-vlan:
         ipv4_address: 10.10.30.25
 
+  # In the healthcare-v2 context the Gizmo PLCs don't exist, so clear their
+  # depends_on to prevent project-load validation errors.
+  plc_exporter:
+    depends_on: []
+
+  order_executor:
+    depends_on: []
+
   # Override mirth-connect to depend on device_exporter instead of plc_exporter
   # when running in the healthcare-v2 context.
   mirth-connect:
