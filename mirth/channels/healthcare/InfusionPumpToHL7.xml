@@ -82,7 +82,7 @@
 
     <transformer version="4.4.0">
       <elements>
-        <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+        <com.mirth.connect.plugins.javascriptstep.JavaScriptStep version="4.4.0">
           <name>Parse infusion pump snapshot</name>
           <sequenceNumber>0</sequenceNumber>
           <enabled>true</enabled>
@@ -101,7 +101,7 @@ logger.info('Infusion pump snapshot parsed: ' + snapshot.timestamp +
             ' | status=' + (snapshot.devices.infusion_pump.status || 'unknown') +
             ' | flow=' + (pump.flow_rate_ml_h || 0) + ' ml/h');
           ]]></script>
-        </com.mirth.connect.plugins.javascriptrule.JavaScriptRule>
+        </com.mirth.connect.plugins.javascriptstep.JavaScriptStep>
       </elements>
       <inboundDataType>RAW</inboundDataType>
       <outboundDataType>RAW</outboundDataType>
@@ -165,7 +165,7 @@ logger.info('Infusion pump snapshot parsed: ' + snapshot.timestamp +
 
       <transformer version="4.4.0">
         <elements>
-          <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+          <com.mirth.connect.plugins.javascriptstep.JavaScriptStep version="4.4.0">
             <name>Build HL7 ORU^R01 — Infusion Pump parameters</name>
             <sequenceNumber>0</sequenceNumber>
             <enabled>true</enabled>
@@ -236,7 +236,7 @@ var lines = [
 
 tmp = lines.join('\r');
             ]]></script>
-          </com.mirth.connect.plugins.javascriptrule.JavaScriptRule>
+          </com.mirth.connect.plugins.javascriptstep.JavaScriptStep>
         </elements>
         <inboundDataType>RAW</inboundDataType>
         <outboundDataType>RAW</outboundDataType>

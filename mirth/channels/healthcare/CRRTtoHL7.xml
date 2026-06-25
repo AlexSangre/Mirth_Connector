@@ -82,7 +82,7 @@
 
     <transformer version="4.4.0">
       <elements>
-        <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+        <com.mirth.connect.plugins.javascriptstep.JavaScriptStep version="4.4.0">
           <name>Parse CRRT snapshot</name>
           <sequenceNumber>0</sequenceNumber>
           <enabled>true</enabled>
@@ -101,7 +101,7 @@ logger.info('CRRT snapshot parsed: ' + snapshot.timestamp +
             ' | mode=' + (crrt.mode || 'unknown') +
             ' | status=' + (crrt.therapy_status || 'unknown'));
           ]]></script>
-        </com.mirth.connect.plugins.javascriptrule.JavaScriptRule>
+        </com.mirth.connect.plugins.javascriptstep.JavaScriptStep>
       </elements>
       <inboundDataType>RAW</inboundDataType>
       <outboundDataType>RAW</outboundDataType>
@@ -165,7 +165,7 @@ logger.info('CRRT snapshot parsed: ' + snapshot.timestamp +
 
       <transformer version="4.4.0">
         <elements>
-          <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+          <com.mirth.connect.plugins.javascriptstep.JavaScriptStep version="4.4.0">
             <name>Build HL7 ORU^R01 — CRRT circuit parameters</name>
             <sequenceNumber>0</sequenceNumber>
             <enabled>true</enabled>
@@ -230,7 +230,7 @@ var lines = [
 
 tmp = lines.join('\r');
             ]]></script>
-          </com.mirth.connect.plugins.javascriptrule.JavaScriptRule>
+          </com.mirth.connect.plugins.javascriptstep.JavaScriptStep>
         </elements>
         <inboundDataType>RAW</inboundDataType>
         <outboundDataType>RAW</outboundDataType>
