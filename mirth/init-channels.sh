@@ -1,6 +1,6 @@
 #!/bin/sh
 # Waits for Mirth Connect to be ready, then imports and deploys all channels
-# via the REST API using HTTP Basic Auth.
+# via the REST API using HTTP Basic Auth + per-channel deploy.
 # Safe to re-run: Mirth upserts channels by XML channel ID.
 
 set -e
@@ -9,9 +9,8 @@ MIRTH_URL="https://mirth-connect:8443/api"
 MIRTH_USER="${MIRTH_USER:-admin}"
 MIRTH_PASS="${MIRTH_PASS:-admin}"
 CHANNELS_DIR="/channels"
-AUTH="${MIRTH_USER}:${MIRTH_PASS}"
 
-CURL="curl -sk --max-time 10 -u $AUTH -H X-Requested-With:OpenAPI"
+CURL="curl -sk --max-time 10 -u ${MIRTH_USER}:${MIRTH_PASS} -H X-Requested-With:OpenAPI"
 
 # ---------------------------------------------------------------------------
 # 1. Wait until Mirth is accepting requests
@@ -28,37 +27,36 @@ done
 echo "[init] Mirth Connect is ready."
 
 # ---------------------------------------------------------------------------
-# 2. Import every XML file
+# 2. Import + deploy each channel
 # ---------------------------------------------------------------------------
 find "$CHANNELS_DIR" -name "*.xml" | sort | while read -r xml; do
   name=$(basename "$xml")
-  echo "[init] Importing: $name"
+
+  # Extract channel ID from the XML file itself
+  channel_id=$(grep -o '<id>[^<]*</id>' "$xml" | head -1 | sed 's/<[^>]*>//g')
+  echo "[init] Importing: $name (id=$channel_id)"
+
   code=$($CURL -o /tmp/mirth-resp.txt -w "%{http_code}" \
     -X POST "$MIRTH_URL/channels" \
     -H "Content-Type: application/xml" \
-    -H "Accept: application/xml" \
     --data-binary "@$xml")
 
   if [ "$code" = "200" ] || [ "$code" = "201" ]; then
-    echo "[init] OK ($code): $name"
+    echo "[init] Imported OK ($code): $name"
   else
-    echo "[init] WARN ($code): $name — $(cat /tmp/mirth-resp.txt)"
+    echo "[init] Import WARN ($code): $name — $(cat /tmp/mirth-resp.txt)"
+  fi
+
+  # Deploy this channel individually
+  echo "[init] Deploying: $name"
+  code=$($CURL -o /tmp/mirth-deploy.txt -w "%{http_code}" \
+    -X POST "$MIRTH_URL/channels/$channel_id/_deploy")
+
+  if [ "$code" = "200" ] || [ "$code" = "204" ]; then
+    echo "[init] Deployed OK ($code): $name"
+  else
+    echo "[init] Deploy WARN ($code): $name — $(cat /tmp/mirth-deploy.txt)"
   fi
 done
 
-# ---------------------------------------------------------------------------
-# 3. Deploy all channels
-# ---------------------------------------------------------------------------
-echo "[init] Deploying all channels..."
-code=$($CURL -o /tmp/mirth-deploy.txt -w "%{http_code}" \
-  -X POST "$MIRTH_URL/channels/deploy" \
-  -H "Content-Type: application/xml" \
-  -H "Accept: application/xml" \
-  -d "<set/>")
-
-if [ "$code" = "200" ] || [ "$code" = "204" ]; then
-  echo "[init] All channels deployed successfully."
-else
-  echo "[init] Deploy returned HTTP $code: $(cat /tmp/mirth-deploy.txt)"
-  exit 1
-fi
+echo "[init] Done."
