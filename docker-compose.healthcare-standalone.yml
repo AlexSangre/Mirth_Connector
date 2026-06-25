@@ -61,6 +61,26 @@ services:
     depends_on:
       - device_exporter
 
+  # --------------------------------------------------------------------------
+  # mirth-init — imports and deploys only the healthcare/ channels on startup.
+  # restart: "no" so it runs once per compose up.
+  # --------------------------------------------------------------------------
+  mirth-init:
+    container_name: mirth-init
+    image: curlimages/curl:latest
+    restart: "no"
+    environment:
+      MIRTH_USER: admin
+      MIRTH_PASS: admin
+    volumes:
+      - ./mirth/channels/healthcare:/channels:ro
+      - ./mirth/init-channels.sh:/init-channels.sh:ro
+    entrypoint: ["/bin/sh", "/init-channels.sh"]
+    networks:
+      medical-vlan: {}
+    depends_on:
+      - mirth-connect
+
 volumes:
   plc_data: {}
   plc_latest: {}
