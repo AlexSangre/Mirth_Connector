@@ -34,10 +34,13 @@ find "$CHANNELS_DIR" -name "*.xml" | sort | while read -r xml; do
   channel_id=$(grep -o '<id>[^<]*</id>' "$xml" | head -1 | sed 's/<[^>]*>//g')
   echo "[init] Importing: $name (id=$channel_id)"
 
+  # Strip XML declaration and comment block — Mirth REST API chokes on them
+  sed '/^<?xml/d; /^<!--/,/^-->/d' "$xml" > /tmp/channel-clean.xml
+
   code=$($CURL -o /tmp/mirth-resp.txt -w "%{http_code}" \
     -X PUT "$MIRTH_URL/channels/$channel_id?override=true" \
     -H "Content-Type: application/xml" \
-    --data-binary "@$xml")
+    --data-binary "@/tmp/channel-clean.xml")
 
   body=$(cat /tmp/mirth-resp.txt)
   if [ "$code" = "200" ] || [ "$code" = "201" ] || [ "$code" = "204" ]; then
