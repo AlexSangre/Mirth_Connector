@@ -14,13 +14,16 @@ COOKIES="/tmp/mirth-cookies.txt"
 # 1. Wait until Mirth is accepting logins
 # ---------------------------------------------------------------------------
 echo "[init] Waiting for Mirth Connect..."
-until curl -sk --max-time 5 \
+until {
+  code=$(curl -sk --max-time 5 \
     -c "$COOKIES" \
     -o /dev/null -w "%{http_code}" \
     -X POST "$MIRTH_URL/users/_login" \
     -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "username=${MIRTH_USER}&password=${MIRTH_PASS}" \
-    | grep -qE "^200$"; do
+    -d "username=${MIRTH_USER}&password=${MIRTH_PASS}")
+  echo "[init] Login response: $code"
+  case "$code" in 2*) true ;; *) false ;; esac
+}; do
   echo "[init] Not ready yet, retrying in 5s..."
   sleep 5
 done
