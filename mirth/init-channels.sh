@@ -35,7 +35,7 @@ find "$CHANNELS_DIR" -name "*.xml" | sort | while read -r xml; do
   echo "[init] Importing: $name (id=$channel_id)"
 
   code=$($CURL -o /tmp/mirth-resp.txt -w "%{http_code}" \
-    -X PUT "$MIRTH_URL/channels/$channel_id" \
+    -X PUT "$MIRTH_URL/channels/$channel_id?override=true" \
     -H "Content-Type: application/xml" \
     --data-binary "@$xml")
 
