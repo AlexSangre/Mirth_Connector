@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   Mirth Connect channel: Vital Signs Monitor → HL7 v2 ORU^R01
-  -------------------------------------------------------------
+  =========================================================
   Source      : File Reader — reads vitals_snapshot_*.json from /data/plc_readings/
                 Written by device_exporter polling the healthcare-v2 Vital Signs API.
   Transformer : JavaScript — maps PatientMonitor snapshot to HL7 v2.5.1 ORU^R01

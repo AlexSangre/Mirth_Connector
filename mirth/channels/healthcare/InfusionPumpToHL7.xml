@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   Mirth Connect channel: Infusion Pump Simulator → HL7 v2 ORU^R01
-  ----------------------------------------------------------------
+  ================================================================
   Source      : File Reader — reads infusion_snapshot_*.json from /data/plc_readings/
                 Written by device_exporter polling the healthcare-v2 Infusion Pump API.
   Transformer : JavaScript — maps pump registers to HL7 v2.5.1 ORU^R01
