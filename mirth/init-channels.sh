@@ -1,7 +1,7 @@
 #!/bin/sh
-# Waits for Mirth Connect to be ready, then imports and deploys all channels
-# via the REST API using HTTP Basic Auth + per-channel deploy.
-# Safe to re-run: Mirth upserts channels by XML channel ID.
+# Imports and deploys all channels via Mirth REST API.
+# Uses PUT /api/channels/{id} to push the full channel XML.
+# Safe to re-run: PUT upserts by channel ID.
 
 set -e
 
@@ -27,35 +27,44 @@ done
 echo "[init] Mirth Connect is ready."
 
 # ---------------------------------------------------------------------------
-# 2. Import + deploy each channel
+# 2. Import each channel via PUT (preserves full XML content)
 # ---------------------------------------------------------------------------
 find "$CHANNELS_DIR" -name "*.xml" | sort | while read -r xml; do
   name=$(basename "$xml")
-
-  # Extract channel ID from the XML file itself
   channel_id=$(grep -o '<id>[^<]*</id>' "$xml" | head -1 | sed 's/<[^>]*>//g')
   echo "[init] Importing: $name (id=$channel_id)"
 
   code=$($CURL -o /tmp/mirth-resp.txt -w "%{http_code}" \
-    -X POST "$MIRTH_URL/channels" \
+    -X PUT "$MIRTH_URL/channels/$channel_id" \
     -H "Content-Type: application/xml" \
     --data-binary "@$xml")
 
-  if [ "$code" = "200" ] || [ "$code" = "201" ]; then
-    echo "[init] Imported OK ($code): $name"
+  body=$(cat /tmp/mirth-resp.txt)
+  if [ "$code" = "200" ] || [ "$code" = "201" ] || [ "$code" = "204" ]; then
+    echo "[init] Import OK ($code): $name"
   else
-    echo "[init] Import WARN ($code): $name — $(cat /tmp/mirth-resp.txt)"
+    echo "[init] Import FAIL ($code): $name"
+    echo "[init] Response: $body"
   fi
+done
 
-  # Deploy this channel individually
+# ---------------------------------------------------------------------------
+# 3. Deploy each channel by ID
+# ---------------------------------------------------------------------------
+find "$CHANNELS_DIR" -name "*.xml" | sort | while read -r xml; do
+  name=$(basename "$xml")
+  channel_id=$(grep -o '<id>[^<]*</id>' "$xml" | head -1 | sed 's/<[^>]*>//g')
   echo "[init] Deploying: $name"
+
   code=$($CURL -o /tmp/mirth-deploy.txt -w "%{http_code}" \
     -X POST "$MIRTH_URL/channels/$channel_id/_deploy")
 
+  body=$(cat /tmp/mirth-deploy.txt)
   if [ "$code" = "200" ] || [ "$code" = "204" ]; then
-    echo "[init] Deployed OK ($code): $name"
+    echo "[init] Deploy OK ($code): $name"
   else
-    echo "[init] Deploy WARN ($code): $name — $(cat /tmp/mirth-deploy.txt)"
+    echo "[init] Deploy FAIL ($code): $name"
+    echo "[init] Response: $body"
   fi
 done
 
