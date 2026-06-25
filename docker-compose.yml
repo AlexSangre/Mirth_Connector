@@ -82,11 +82,7 @@ services:
   # NextGen Connect 4.4.1 — HL7/FHIR integration engine.
   # Admin console: https://localhost:8443  (admin / admin on first start)
   #
-  # Channels to import after first start:
-  #   mirth/channels/PLCtoOpenEMR.xml       vital signs JSON → HL7 ORU^R01
-  #   mirth/channels/OrthancToOpenEMR.xml   Orthanc DICOM study → HL7 ORU^R01
-  #   mirth/channels/VitalSignsAlerts.xml   threshold alerting → HL7 ORU^R01
-  #   mirth/channels/PerfusorOrders.xml     MLLP:6661 → perfusor order JSON
+  # Channels are imported and deployed automatically by mirth-init below.
   # --------------------------------------------------------------------------
   mirth-connect:
     container_name: mirth-connect
@@ -113,6 +109,27 @@ services:
         ipv4_address: 10.10.10.14
     depends_on:
       - plc_exporter
+
+  # --------------------------------------------------------------------------
+  # mirth-init — one-shot service that imports and deploys all channels via
+  # the Mirth REST API after the engine is ready.  restart: "no" ensures it
+  # only runs once per compose up.  Safe to re-run: Mirth upserts by channel ID.
+  # --------------------------------------------------------------------------
+  mirth-init:
+    container_name: mirth-init
+    image: curlimages/curl:latest
+    restart: "no"
+    environment:
+      MIRTH_USER: admin
+      MIRTH_PASS: admin
+    volumes:
+      - ./mirth/channels:/channels:ro
+      - ./mirth/init-channels.sh:/init-channels.sh:ro
+    entrypoint: ["/bin/sh", "/init-channels.sh"]
+    networks:
+      level3_operaciones: {}
+    depends_on:
+      - mirth-connect
 
 volumes:
   plc_data: {}          # Timestamped JSON snapshots (PLCtoOpenEMR reads + deletes)
