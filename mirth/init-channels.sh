@@ -27,6 +27,21 @@ done
 echo "[init] Mirth Connect is ready."
 
 # ---------------------------------------------------------------------------
+# 1b. Wait until extensions are installed in the DB (not just files on disk)
+#     /api/extensions returns non-empty only after Derby has activated them.
+# ---------------------------------------------------------------------------
+echo "[init] Waiting for extensions to activate..."
+until {
+  size=$($CURL -o /dev/null -w "%{size_download}" "$MIRTH_URL/extensions")
+  echo "[init] Extensions response size: $size bytes"
+  [ "$size" -gt 50 ]
+}; do
+  echo "[init] Extensions not active yet, retrying in 10s..."
+  sleep 10
+done
+echo "[init] Extensions activated."
+
+# ---------------------------------------------------------------------------
 # 2. Import each channel via PUT (preserves full XML content)
 # ---------------------------------------------------------------------------
 find "$CHANNELS_DIR" -name "*.xml" | sort | while read -r xml; do
