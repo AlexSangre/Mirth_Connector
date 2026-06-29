@@ -199,6 +199,21 @@ tmp = lines.join('\r');
           </batchProperties>
         </outboundProperties>
       </transformer>
+      <responseTransformer version="4.4.0">
+        <elements/>
+        <inboundDataType>RAW</inboundDataType>
+        <outboundDataType>RAW</outboundDataType>
+        <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+            <splitType>JavaScript</splitType><batchScript></batchScript>
+          </batchProperties>
+        </inboundProperties>
+        <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+            <splitType>JavaScript</splitType><batchScript></batchScript>
+          </batchProperties>
+        </outboundProperties>
+      </responseTransformer>
       <filter version="4.4.0"><elements/></filter>
       <transportName>File Writer</transportName>
       <mode>DESTINATION</mode>
