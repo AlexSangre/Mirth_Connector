@@ -5,10 +5,6 @@
   <nextMetaDataId>3</nextMetaDataId>
   <name>Perfusor Orders</name>
   <description>MLLP hub: receives HL7 ORM^O01 medication orders from OpenEMR, maps medication name to perfusor number, and writes a JSON order file for the order_executor service to apply via Modbus to the perfusor PLC. Closes the OpenEMR → PLC infusion pump control loop.</description>
-  <lastModified>
-    <time>1717545600000</time>
-    <timezone>UTC</timezone>
-  </lastModified>
   <revision>1</revision>
 
   

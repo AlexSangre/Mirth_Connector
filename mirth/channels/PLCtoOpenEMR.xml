@@ -5,10 +5,6 @@
   <nextMetaDataId>3</nextMetaDataId>
   <name>PLC to OpenEMR</name>
   <description>Reads PLC JSON snapshots from plc_exporter and transforms vital signs to HL7 v2 ORU^R01 messages ready for OpenEMR ingestion.</description>
-  <lastModified>
-    <time>1717545600000</time>
-    <timezone>UTC</timezone>
-  </lastModified>
   <revision>1</revision>
 
   <sourceConnector version="4.4.0">

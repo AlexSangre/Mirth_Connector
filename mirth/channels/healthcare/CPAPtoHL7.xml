@@ -5,10 +5,6 @@
   <nextMetaDataId>2</nextMetaDataId>
   <name>CPAP to HL7</name>
   <description>Reads CPAP device snapshots from the healthcare-v2 CPAP Simulator REST API (via device_exporter) and transforms therapy parameters to HL7 v2.5.1 ORU^R01 messages.</description>
-  <lastModified>
-    <time>1750636800000</time>
-    <timezone>UTC</timezone>
-  </lastModified>
   <revision>1</revision>
 
   <sourceConnector version="4.4.0">
