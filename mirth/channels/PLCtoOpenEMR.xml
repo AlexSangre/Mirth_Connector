@@ -28,7 +28,7 @@
       </sourceConnectorProperties>
             <pollConnectorProperties version="4.4.0">
         <pollingFrequency>30000</pollingFrequency>
-        <pollConnectorPropertiesAdvanced version="4.4.0"><interval>30000</interval></pollConnectorPropertiesAdvanced>
+        <pollConnectorPropertiesAdvanced version="4.4.0"><weekly>false</weekly><dayOfMonth>1</dayOfMonth><allDay>true</allDay><startingHour>0</startingHour><startingMinute>0</startingMinute><endingHour>23</endingHour><endingMinute>59</endingMinute></pollConnectorPropertiesAdvanced>
       </pollConnectorProperties>
       <scheme>FILE</scheme>
       <host>/data/plc_readings</host>
