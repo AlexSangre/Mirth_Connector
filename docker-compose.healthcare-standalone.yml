@@ -1,14 +1,13 @@
 ##############################################################################
 # Mirth Connector — healthcare-v2 standalone
 #
-# Self-contained; does NOT require docker-compose.yml or the Gizmo PLC stack.
+# Self-contained integration bridge for the healthcare-v2 device simulators.
 # Requires healthcare-v2 to be running first (creates the medical-vlan network).
 #
 # Usage:
 #   docker compose -f docker-compose.healthcare-standalone.yml up -d
 #
 # Mirth admin console: https://<host-ip>:8443  (admin / admin on first start)
-# Import channels from: mirth/channels/healthcare/
 ##############################################################################
 
 services:
@@ -24,13 +23,11 @@ services:
       CPAP_URL:          "http://10.10.30.11:8000"
       CRRT_URL:          "http://10.10.30.10:8000"
       INFUSION_PUMP_URL: "http://10.10.30.13:8000"
-      OUTPUT_DIR:    /data/plc_readings
-      LATEST_DIR:    /data/plc_latest
+      OUTPUT_DIR:    /data/snapshots
       POLL_INTERVAL: "30"
       HTTP_TIMEOUT:  "5"
     volumes:
-      - plc_data:/data/plc_readings
-      - plc_latest:/data/plc_latest
+      - snapshots:/data/snapshots
     networks:
       medical-vlan:
         ipv4_address: 10.10.30.25
@@ -46,25 +43,18 @@ services:
       KEYSTORE_STOREPASS: changeit
       KEYSTORE_KEYPASS: changeit
     volumes:
-      - plc_data:/data/plc_readings
-      - plc_latest:/data/plc_latest:ro
+      - snapshots:/data/snapshots
       - hl7_out:/data/hl7_out
-      - orders_data:/data/orders
       - mirth_appdata:/opt/connect/appdata
-      - ./mirth/channels:/opt/connect/appdata/channel-backups:ro
+      - ./mirth/channels/healthcare:/opt/connect/appdata/channel-backups:ro
     ports:
       - "8443:8443"
-      - "6661:6661"
     networks:
       medical-vlan:
         ipv4_address: 10.10.30.30
     depends_on:
       - device_exporter
 
-  # --------------------------------------------------------------------------
-  # mirth-init — imports and deploys only the healthcare/ channels on startup.
-  # restart: "no" so it runs once per compose up.
-  # --------------------------------------------------------------------------
   mirth-init:
     container_name: mirth-init
     image: curlimages/curl:latest
@@ -82,10 +72,8 @@ services:
       - mirth-connect
 
 volumes:
-  plc_data: {}
-  plc_latest: {}
+  snapshots: {}
   hl7_out: {}
-  orders_data: {}
   mirth_appdata: {}
 
 networks:

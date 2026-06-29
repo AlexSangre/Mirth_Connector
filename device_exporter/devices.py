@@ -127,7 +127,6 @@ DEVICES: tuple[DeviceConfig, ...] = (
         endpoint     = "/state",
         status_field = "status",
         normalize    = _normalize_vitals,
-        write_latest = True,   # also keeps latest.json updated for VitalSignsAlerts channel
     ),
     DeviceConfig(
         key          = "cpap",
