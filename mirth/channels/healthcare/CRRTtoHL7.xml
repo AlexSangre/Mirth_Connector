@@ -1,28 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!--
-  Mirth Connect channel: CRRT Simulator → HL7 v2 ORU^R01
-  ========================================================
-  Source      : File Reader — reads crrt_snapshot_*.json from /data/plc_readings/
-                Written by device_exporter polling the healthcare-v2 CRRT API.
-  Transformer : JavaScript — maps CircuitState to HL7 v2.5.1 ORU^R01
-  Destination : File Writer — /data/hl7_out/CRRT_ORU_*.hl7
+﻿<?xml version="1.0" encoding="UTF-8"?>
 
-  OBX codes used (all LOCAL — CRRT-specific parameters lack a standardised LOINC panel):
-    CRRT-MODE         Therapy mode (CVVH/CVVHD/CVVHDF/SCUF)
-    CRRT-STATUS       Therapy status
-    CRRT-BLOOD-FLOW   Blood pump speed            mL/min
-    CRRT-UF-RATE      Net ultrafiltration rate    mL/h
-    CRRT-TMP          Transmembrane pressure       mm[Hg]
-    CRRT-ACCESS-P     Access (arterial) pressure   mm[Hg]
-    CRRT-RETURN-P     Return (venous) pressure     mm[Hg]
-    CRRT-FILT-SAT     Filter saturation            %
-    CRRT-FILT-LIFE    Filter life remaining        %
-    CRRT-FILT-TIME    Filter runtime               h
-    CRRT-NET-BAL      Net fluid balance            mL
-    CRRT-HEPARIN      Heparin infusion rate        IU/h
-
-  Import via: Mirth Connect Administrator → Channels → Import Channel
--->
 <channel version="4.4.0">
   <id>f3a4b5c6-d7e8-9012-fabc-334455667788</id>
   <nextMetaDataId>2</nextMetaDataId>

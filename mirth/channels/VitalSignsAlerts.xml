@@ -1,27 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!--
-  Mirth Connect channel: Vital Signs Threshold Alerting
-  ------------------------------------------------------
-  Source : JavaScript Reader — reads /data/plc_latest/latest.json every 30 s
-           Checks vital signs against clinical thresholds
-           Returns a message ONLY when at least one value is out of range
-           (no alert = no message = no unnecessary traffic)
+﻿<?xml version="1.0" encoding="UTF-8"?>
 
-  Thresholds used (standard ICU clinical ranges):
-    Heart rate        : L<50   LL<30   H>120  HH>150  bpm
-    SpO2              : L<90   LL<85                  %
-    Systolic BP       : L<90   LL<70   H>140  HH>180  mmHg
-    Diastolic BP      : L<60   LL<40   H>95   HH>120  mmHg
-    Body temperature  : L<36   LL<35   H>38   HH>40   °C
-    Respiratory rate  : L<10   LL<5    H>25   HH>35   /min
-
-  OBX.8 abnormal flags: HH (critically high), H (high), L (low), LL (critically low)
-
-  Destination 1: File Writer — /data/hl7_out/ALERT_ORU_*.hl7
-  Destination 2: HTTP Sender — OpenEMR FHIR /Observation (disabled by default)
-
-  Import via: Mirth Connect Administrator → Channels → Import Channel
--->
 <channel version="4.4.0">
   <id>c3d4e5f6-a7b8-9012-cdef-123456789012</id>
   <nextMetaDataId>3</nextMetaDataId>
@@ -33,10 +11,7 @@
   </lastModified>
   <revision>1</revision>
 
-  <!-- ====================================================================
-       SOURCE: JavaScript Reader — polls /data/plc_latest/latest.json
-       Only returns a message when at least one vital sign is abnormal.
-       ==================================================================== -->
+  
   <sourceConnector version="4.4.0">
     <metaDataId>0</metaDataId>
     <name>sourceConnector</name>
@@ -179,7 +154,7 @@ channelMap.put('ts',     payload.timestamp);
 
   <destinationConnectors>
 
-    <!-- Destination 1: Write priority HL7 ORU^R01 alert to file -->
+    
     <connector version="4.4.0">
       <metaDataId>1</metaDataId>
       <name>Write Alert HL7 ORU^R01</name>
@@ -315,7 +290,7 @@ tmp = lines.join('\r');
       <waitForPrevious>true</waitForPrevious>
     </connector>
 
-    <!-- Destination 2: HTTP Sender → OpenEMR FHIR /Observation (DISABLED) -->
+    
     <connector version="4.4.0">
       <metaDataId>2</metaDataId>
       <name>Send Alert to OpenEMR FHIR</name>

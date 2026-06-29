@@ -1,28 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!--
-  Mirth Connect channel: Infusion Pump Simulator → HL7 v2 ORU^R01
-  ================================================================
-  Source      : File Reader — reads infusion_snapshot_*.json from /data/plc_readings/
-                Written by device_exporter polling the healthcare-v2 Infusion Pump API.
-  Transformer : JavaScript — maps pump registers to HL7 v2.5.1 ORU^R01
-  Destination : File Writer — /data/hl7_out/INFUSION_ORU_*.hl7
+﻿<?xml version="1.0" encoding="UTF-8"?>
 
-  OBX codes used (all LOCAL — no standardised LOINC panel for IV infusion pumps):
-    PUMP-STATUS    Infusion status (infusing/kvo/standby)   ST
-    PUMP-FLOW      Flow rate                                ml/h
-    PUMP-VTBI      Volume to be infused                     ml
-    PUMP-INFUSED   Volume already infused                   ml
-    PUMP-DROPS     Drop rate sensor                         gotas/min
-    PUMP-PRESS     Line pressure                            kPa
-    PUMP-OCCL-THR  Occlusion threshold                      kPa
-    PUMP-BUBBLE    Air bubble detected                      ST
-    PUMP-DOOR      Door open                                ST
-    PUMP-BAT-V     Battery voltage                          V
-    PUMP-BAT-MIN   Battery remaining autonomy               min
-    PUMP-ALARM     Active alarm flags                       ST
-
-  Import via: Mirth Connect Administrator → Channels → Import Channel
--->
 <channel version="4.4.0">
   <id>b5c6d7e8-f9a0-1234-bcde-556677889900</id>
   <nextMetaDataId>2</nextMetaDataId>

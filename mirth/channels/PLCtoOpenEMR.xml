@@ -1,14 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!--
-  Mirth Connect channel: PLC Snapshot → HL7 v2 ORU^R01
-  -------------------------------------------------------
-  Source : File Reader — reads plc_snapshot_*.json from /data/plc_readings/
-  Transformer: JavaScript — builds HL7 ORU^R01 with vital signs OBX segments
-  Destination 1: File Writer — writes .hl7 files to /data/hl7_out/ (staging)
-  Destination 2: HTTP Sender — sends to OpenEMR FHIR API (disabled by default)
+﻿<?xml version="1.0" encoding="UTF-8"?>
 
-  Import via: Mirth Connect Administrator → Channels → Import Channel
--->
 <channel version="4.4.0">
   <id>a1b2c3d4-e5f6-7890-abcd-ef1234567890</id>
   <nextMetaDataId>3</nextMetaDataId>
@@ -132,7 +123,7 @@ logger.info('PLC snapshot processed: ' + snapshot.timestamp);
 
   <destinationConnectors>
 
-    <!-- Destination 1: Write HL7 ORU^R01 to file (staging area for OpenEMR) -->
+    
     <connector version="4.4.0">
       <metaDataId>1</metaDataId>
       <name>Write HL7 ORU^R01</name>
@@ -258,7 +249,7 @@ tmp = lines.join('\r');
       <waitForPrevious>true</waitForPrevious>
     </connector>
 
-    <!-- Destination 2: HTTP Sender to OpenEMR FHIR API (DISABLED — enable when ready) -->
+    
     <connector version="4.4.0">
       <metaDataId>2</metaDataId>
       <name>Send to OpenEMR FHIR</name>

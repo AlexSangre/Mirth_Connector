@@ -1,28 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!--
-  Mirth Connect channel: Orthanc DICOM Study → HL7 v2 ORU^R01
-  -------------------------------------------------------------
-  Source : JavaScript Reader — polls Orthanc REST API (/changes) every 30 s
-           Detects new DICOM studies (ChangeType = NewStudy)
-           Fetches study metadata from /studies/{id}
-           Returns one study JSON per message tick
+﻿<?xml version="1.0" encoding="UTF-8"?>
 
-  Transformer: JavaScript — builds HL7 v2 ORU^R01 with DICOM study reference
-               OBX|1 → StudyInstanceUID
-               OBX|2 → Modality (CT / MR / XA ...)
-               OBX|3 → Study description
-               OBX|4 → Accession number
-
-  Destination 1: File Writer — writes .hl7 to /data/hl7_out/ (staging)
-  Destination 2: HTTP Sender — POST to OpenEMR FHIR API (disabled by default)
-
-  Flow context:
-    tac_scan trigger (gizmo-brain.py)
-      ├─► send_dicom.py ──► Orthanc C-STORE (10.10.10.15:4242)   ← direct DICOM
-      └─► [this channel polls Orthanc REST] ──► HL7 ──► OpenEMR  ← this channel
-
-  Import via: Mirth Connect Administrator → Channels → Import Channel
--->
 <channel version="4.4.0">
   <id>b2c3d4e5-f6a7-8901-bcde-f12345678901</id>
   <nextMetaDataId>3</nextMetaDataId>
@@ -34,11 +11,7 @@
   </lastModified>
   <revision>1</revision>
 
-  <!-- ====================================================================
-       SOURCE: JavaScript Reader — polls Orthanc /changes every 30 s
-       Uses globalChannelMap to track last processed sequence and queue
-       pending studies so each message tick processes exactly one study.
-       ==================================================================== -->
+  
   <sourceConnector version="4.4.0">
     <metaDataId>0</metaDataId>
     <name>sourceConnector</name>
@@ -157,7 +130,7 @@ return JSON.stringify(firstStudy);
       ]]></script>
     </properties>
 
-    <!-- Transformer: parse Orthanc study JSON, extract key fields -->
+    
     <transformer version="4.4.0">
       <elements>
         <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
@@ -212,7 +185,7 @@ logger.info('Study metadata extracted: PatientID=' + ptags.PatientID +
 
   <destinationConnectors>
 
-    <!-- Destination 1: Write HL7 ORU^R01 (DICOM study notification) to file -->
+    
     <connector version="4.4.0">
       <metaDataId>1</metaDataId>
       <name>Write HL7 ORU^R01 DICOM</name>
@@ -345,7 +318,7 @@ tmp = lines.join('\r');
       <waitForPrevious>true</waitForPrevious>
     </connector>
 
-    <!-- Destination 2: HTTP POST to OpenEMR FHIR API — ImagingStudy resource (DISABLED) -->
+    
     <connector version="4.4.0">
       <metaDataId>2</metaDataId>
       <name>Send to OpenEMR FHIR ImagingStudy</name>
