@@ -26,10 +26,10 @@
         </resourceIds>
         <queueBufferSize>1000</queueBufferSize>
       </sourceConnectorProperties>
-      <pollConnectorProperties version="4.4.0">
+            <pollConnectorProperties version="4.4.0">
         <pollingFrequency>30000</pollingFrequency>
-        <pollConnectorPropertiesAdvanced version="4.4.0">false</pollOnStart>
-          <scheduleType>INTERVAL</scheduleType>TIME</intervalType>UTC</timeZone>
+        <pollConnectorPropertiesAdvanced version="4.4.0">
+          <scheduleType>INTERVAL</scheduleType>
           <interval>30000</interval>
           <cronJobs/>
         </pollConnectorPropertiesAdvanced>

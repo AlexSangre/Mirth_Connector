@@ -27,8 +27,8 @@
         </resourceIds>
         <queueBufferSize>1000</queueBufferSize>
       </sourceConnectorProperties>
-      <pollConnectorPropertiesAdvanced version="4.4.0">true</pollOnStart>
-        <scheduleType>INTERVAL</scheduleType>TIME</intervalType>UTC</timeZone>
+      <
+        <scheduleType>INTERVAL<
         <interval>30000</interval>
         <cronJobs/>
       </pollConnectorPropertiesAdvanced>
