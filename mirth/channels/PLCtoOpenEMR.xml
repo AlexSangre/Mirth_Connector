@@ -389,6 +389,10 @@ tmp = JSON.stringify(bundle, null, 2);
     <initialState>STARTED</initialState>
     <storeAttachments>true</storeAttachments>
     <metaDataColumns/>
+    <attachmentProperties version="4.4.0">
+      <type>None</type>
+      <properties/>
+    </attachmentProperties>
     <resourceIds class="linked-hash-map">
       <entry>
         <string>Default Resource</string>
