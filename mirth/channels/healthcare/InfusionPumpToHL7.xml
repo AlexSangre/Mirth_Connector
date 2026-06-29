@@ -150,7 +150,7 @@ logger.info('Infusion pump snapshot parsed: ' + snapshot.timestamp +
 var p  = channelMap.get('pump') || {};
 var ts = channelMap.get('ts')   || new Date().toISOString();
 
-var hl7ts = ts.replace(/[-:T]/g,'').substring(0,14);
+var hl7ts = (ts + '').replace(/[-:T]/g,'').substring(0,14);
 var msgId = 'PUMP' + hl7ts;
 
 function v(field) {

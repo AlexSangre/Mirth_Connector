@@ -154,7 +154,7 @@ logger.info('CPAP snapshot parsed: ' + snapshot.timestamp +
 var c  = channelMap.get('cpap') || {};
 var ts = channelMap.get('ts')   || new Date().toISOString();
 
-var hl7ts = ts.replace(/[-:T]/g,'').substring(0,14);
+var hl7ts = (ts + '').replace(/[-:T]/g,'').substring(0,14);
 var msgId = 'CPAP' + hl7ts;
 
 function v(field) {

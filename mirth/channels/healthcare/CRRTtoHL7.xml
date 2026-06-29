@@ -151,7 +151,7 @@ logger.info('CRRT snapshot parsed: ' + snapshot.timestamp +
 var c  = channelMap.get('crrt') || {};
 var ts = channelMap.get('ts')   || new Date().toISOString();
 
-var hl7ts = ts.replace(/[-:T]/g,'').substring(0,14);
+var hl7ts = (ts + '').replace(/[-:T]/g,'').substring(0,14);
 var msgId = 'CRRT' + hl7ts;
 
 function v(field) {
