@@ -235,4 +235,13 @@ tmp = lines.join('\r');
     </resourceIds>
   </properties>
 
+  <exportData>
+    <metadata>
+      <enabled>true</enabled>
+      <pruningSettings>
+        <archiveEnabled>true</archiveEnabled>
+        <pruneErroredMessages>false</pruneErroredMessages>
+      </pruningSettings>
+    </metadata>
+  </exportData>
 </channel>
