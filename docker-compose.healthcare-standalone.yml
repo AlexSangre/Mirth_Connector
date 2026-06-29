@@ -46,7 +46,7 @@ services:
       KEYSTORE_STOREPASS: changeit
       KEYSTORE_KEYPASS: changeit
     volumes:
-      - plc_data:/data/plc_readings:ro
+      - plc_data:/data/plc_readings
       - plc_latest:/data/plc_latest:ro
       - hl7_out:/data/hl7_out
       - orders_data:/data/orders
