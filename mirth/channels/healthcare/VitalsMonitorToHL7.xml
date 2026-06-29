@@ -123,7 +123,6 @@ logger.info('Vitals snapshot parsed: ' + snapshot.timestamp);
         <secure>true</secure>
         <passive>true</passive>
         <validateConnection>true</validateConnection>
-        <appendToFile>false</appendToFile>
         <charsetEncoding>UTF-8</charsetEncoding>
         <temporary>false</temporary>
         <binary>false</binary>

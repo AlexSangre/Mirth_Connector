@@ -185,7 +185,6 @@ channelMap.put('ts',     payload.timestamp);
         <secure>true</secure>
         <passive>true</passive>
         <validateConnection>true</validateConnection>
-        <appendToFile>false</appendToFile>
         <charsetEncoding>UTF-8</charsetEncoding>
         <temporary>false</temporary>
         <binary>false</binary>
