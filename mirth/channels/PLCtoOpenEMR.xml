@@ -14,7 +14,6 @@
       <pluginProperties/>
       <sourceConnectorProperties version="4.4.0">
         <responseVariable>None</responseVariable>
-        <queueOffload>false</queueOffload>
         <respondAfterProcessing>true</respondAfterProcessing>
         <processBatch>false</processBatch>
         <firstResponse>false</firstResponse>
