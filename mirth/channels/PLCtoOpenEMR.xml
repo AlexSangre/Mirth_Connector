@@ -395,7 +395,6 @@ tmp = JSON.stringify(bundle, null, 2);
         <string>[Default Resource]</string>
       </entry>
     </resourceIds>
-    <queueBufferSize>1000</queueBufferSize>
   </properties>
 
 </channel>
