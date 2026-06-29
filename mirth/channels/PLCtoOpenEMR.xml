@@ -133,7 +133,6 @@ logger.info('PLC snapshot processed: ' + snapshot.timestamp);
           <rotate>false</rotate>
           <includeFilterTransformer>false</includeFilterTransformer>
           <threadCount>1</threadCount>
-          <queueConnectorProperties/>
           <validateResponse>false</validateResponse>
           <resourceIds class="linked-hash-map">
             <entry>
@@ -259,7 +258,6 @@ tmp = lines.join('\r');
           <rotate>false</rotate>
           <includeFilterTransformer>false</includeFilterTransformer>
           <threadCount>1</threadCount>
-          <queueConnectorProperties/>
           <validateResponse>false</validateResponse>
           <resourceIds class="linked-hash-map">
             <entry>
@@ -382,7 +380,7 @@ tmp = JSON.stringify(bundle, null, 2);
   <deployScript>return;</deployScript>
   <undeployScript>return;</undeployScript>
 
-  <properties class="com.mirth.connect.donkey.model.channel.ChannelProperties" version="4.4.0">
+  <properties version="4.4.0">
     <clearGlobalChannelMap>true</clearGlobalChannelMap>
     <messageStorageMode>DEVELOPMENT</messageStorageMode>
     <encryptData>false</encryptData>
@@ -394,7 +392,6 @@ tmp = JSON.stringify(bundle, null, 2);
     <initialState>STARTED</initialState>
     <storeAttachments>true</storeAttachments>
     <metaDataColumns/>
-    <archiveEnabled>true</archiveEnabled>
     <resourceIds class="linked-hash-map">
       <entry>
         <string>Default Resource</string>
@@ -402,7 +399,6 @@ tmp = JSON.stringify(bundle, null, 2);
       </entry>
     </resourceIds>
     <queueBufferSize>1000</queueBufferSize>
-    <channelDependencies/>
   </properties>
 
 </channel>
