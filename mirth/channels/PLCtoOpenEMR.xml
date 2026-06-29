@@ -42,8 +42,6 @@
       <afterProcessingAction>DELETE</afterProcessingAction>
       <moveToDirectory></moveToDirectory>
       <moveToFileName></moveToFileName>
-      <errorsDirectory>/data/plc_errors</errorsDirectory>
-      <errorsFileName></errorsFileName>
       <checkFileAge>true</checkFileAge>
       <fileAge>2000</fileAge>
       <fileSizeMinimum>0</fileSizeMinimum>
