@@ -23,6 +23,20 @@
         </resourceIds>
         <queueBufferSize>1000</queueBufferSize>
       </sourceConnectorProperties>
+      <pollConnectorProperties version="4.4.0">
+        <pollingFrequency>30000</pollingFrequency>
+        <pollingType>interval</pollingType>
+        <cronExpression></cronExpression>
+        <pollConnectorPropertiesAdvanced version="4.4.0">
+          <pollOnStart>false</pollOnStart>
+          <scheduleType>INTERVAL</scheduleType>
+          <scheduledWeeklyDays/>
+          <intervalType>TIME</intervalType>
+          <timeZone>UTC</timeZone>
+          <interval>30000</interval>
+          <cronJobs/>
+        </pollConnectorPropertiesAdvanced>
+      </pollConnectorProperties>
       <scheme>FILE</scheme>
       <host>/data/plc_readings</host>
       <fileFilter>crrt_snapshot_*.json</fileFilter>
