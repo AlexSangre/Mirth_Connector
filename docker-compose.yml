@@ -86,7 +86,7 @@ services:
   # --------------------------------------------------------------------------
   mirth-connect:
     container_name: mirth-connect
-    image: nextgenhealthcare/connect:4.4.1
+    image: nextgenhealthcare/connect:4.4.0
     restart: always
     cap_add:
       - NET_ADMIN
