@@ -28,12 +28,8 @@
       </sourceConnectorProperties>
       <pollConnectorProperties version="4.4.0">
         <pollingFrequency>30000</pollingFrequency>
-        <pollConnectorPropertiesAdvanced version="4.4.0">
-          <pollOnStart>false</pollOnStart>
-          <scheduleType>INTERVAL</scheduleType>
-          <scheduledWeeklyDays/>
-          <intervalType>TIME</intervalType>
-          <timeZone>UTC</timeZone>
+        <pollConnectorPropertiesAdvanced version="4.4.0">false</pollOnStart>
+          <scheduleType>INTERVAL</scheduleType>TIME</intervalType>UTC</timeZone>
           <interval>30000</interval>
           <cronJobs/>
         </pollConnectorPropertiesAdvanced>

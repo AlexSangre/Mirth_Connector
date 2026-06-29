@@ -42,7 +42,7 @@ done
 echo "[init] Extensions activated."
 
 # ---------------------------------------------------------------------------
-# 2. Import each channel via PUT (preserves full XML content)
+# 2. Import each channel via PUT with retry (server may still be initialising)
 # ---------------------------------------------------------------------------
 find "$CHANNELS_DIR" -name "*.xml" | sort | while read -r xml; do
   name=$(basename "$xml")
@@ -52,18 +52,27 @@ find "$CHANNELS_DIR" -name "*.xml" | sort | while read -r xml; do
   # Strip XML declaration and comment block — Mirth REST API chokes on them
   sed '/^<?xml/d; /^<!--/,/^-->/d' "$xml" > /tmp/channel-clean.xml
 
-  code=$($CURL -o /tmp/mirth-resp.txt -w "%{http_code}" \
-    -X PUT "$MIRTH_URL/channels/$channel_id?override=true" \
-    -H "Content-Type: application/xml" \
-    --data-binary "@/tmp/channel-clean.xml")
-
-  body=$(cat /tmp/mirth-resp.txt)
-  if [ "$code" = "200" ] || [ "$code" = "201" ] || [ "$code" = "204" ]; then
-    echo "[init] Import OK ($code): $name"
-  else
-    echo "[init] Import FAIL ($code): $name"
-    echo "[init] Response: $body"
-  fi
+  imported=0
+  for attempt in 1 2 3 4 5; do
+    code=$($CURL -o /tmp/mirth-resp.txt -w "%{http_code}" \
+      -X PUT "$MIRTH_URL/channels/$channel_id?override=true" \
+      -H "Content-Type: application/xml" \
+      --data-binary "@/tmp/channel-clean.xml")
+    body=$(cat /tmp/mirth-resp.txt)
+    if [ "$code" = "200" ] || [ "$code" = "201" ] || [ "$code" = "204" ]; then
+      echo "[init] Import OK ($code): $name"
+      imported=1
+      break
+    elif [ "$code" = "503" ]; then
+      echo "[init] Server not ready (attempt $attempt/5), retrying in 10s..."
+      sleep 10
+    else
+      echo "[init] Import FAIL ($code): $name"
+      echo "[init] Response: $body"
+      break
+    fi
+  done
+  [ "$imported" = "0" ] && echo "[init] Import FAILED after retries: $name"
 done
 
 # ---------------------------------------------------------------------------
