@@ -72,7 +72,9 @@ find "$CHANNELS_DIR" -name "*.xml" | sort | while read -r xml; do
       break
     fi
   done
-  [ "$imported" = "0" ] && echo "[init] Import FAILED after retries: $name"
+  if [ "$imported" = "0" ]; then
+    echo "[init] Import FAILED after retries: $name"
+  fi
 done
 
 # ---------------------------------------------------------------------------
