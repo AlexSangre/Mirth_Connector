@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 
-<channel version="4.4.0">
+<channel version="4.4.1">
   <id>b2c3d4e5-f6a7-8901-bcde-f12345678901</id>
   <nextMetaDataId>3</nextMetaDataId>
   <name>Orthanc to OpenEMR</name>
@@ -12,12 +12,12 @@
   <revision>1</revision>
 
   
-  <sourceConnector version="4.4.0">
+  <sourceConnector version="4.4.1">
     <metaDataId>0</metaDataId>
     <name>sourceConnector</name>
-    <properties class="com.mirth.connect.connectors.js.JavaScriptReceiverProperties" version="4.4.0">
+    <properties class="com.mirth.connect.connectors.js.JavaScriptReceiverProperties" version="4.4.1">
       <pluginProperties/>
-      <sourceConnectorProperties version="4.4.0">
+      <sourceConnectorProperties version="4.4.1">
         <responseVariable>None</responseVariable>
         <queueOffload>false</queueOffload>
         <respondAfterProcessing>true</respondAfterProcessing>
@@ -32,7 +32,7 @@
         </resourceIds>
         <queueBufferSize>1000</queueBufferSize>
       </sourceConnectorProperties>
-      <pollConnectorPropertiesAdvanced version="4.4.0">
+      <pollConnectorPropertiesAdvanced version="4.4.1">
         <pollOnStart>true</pollOnStart>
         <scheduleType>INTERVAL</scheduleType>
         <scheduledWeeklyDays/>
@@ -131,9 +131,9 @@ return JSON.stringify(firstStudy);
     </properties>
 
     
-    <transformer version="4.4.0">
+    <transformer version="4.4.1">
       <elements>
-        <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+        <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.1">
           <name>Extract study metadata</name>
           <sequenceNumber>0</sequenceNumber>
           <enabled>true</enabled>
@@ -160,21 +160,21 @@ logger.info('Study metadata extracted: PatientID=' + ptags.PatientID +
       </elements>
       <inboundDataType>RAW</inboundDataType>
       <outboundDataType>RAW</outboundDataType>
-      <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
-        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+      <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.1">
+        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.1">
           <splitType>JavaScript</splitType>
           <batchScript></batchScript>
         </batchProperties>
       </inboundProperties>
-      <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
-        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+      <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.1">
+        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.1">
           <splitType>JavaScript</splitType>
           <batchScript></batchScript>
         </batchProperties>
       </outboundProperties>
     </transformer>
 
-    <filter version="4.4.0">
+    <filter version="4.4.1">
       <elements/>
     </filter>
     <transportName>JavaScript Reader</transportName>
@@ -186,12 +186,12 @@ logger.info('Study metadata extracted: PatientID=' + ptags.PatientID +
   <destinationConnectors>
 
     
-    <connector version="4.4.0">
+    <connector version="4.4.1">
       <metaDataId>1</metaDataId>
       <name>Write HL7 ORU^R01 DICOM</name>
-      <properties class="com.mirth.connect.connectors.file.FileDispatcherProperties" version="4.4.0">
+      <properties class="com.mirth.connect.connectors.file.FileDispatcherProperties" version="4.4.1">
         <pluginProperties/>
-        <destinationConnectorProperties version="4.4.0">
+        <destinationConnectorProperties version="4.4.1">
           <queueEnabled>false</queueEnabled>
           <sendFirst>false</sendFirst>
           <retryIntervalMillis>10000</retryIntervalMillis>
@@ -228,9 +228,9 @@ logger.info('Study metadata extracted: PatientID=' + ptags.PatientID +
         <binary>false</binary>
       </properties>
 
-      <transformer version="4.4.0">
+      <transformer version="4.4.1">
         <elements>
-          <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+          <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.1">
             <name>Build HL7 ORU^R01 — DICOM study reference</name>
             <sequenceNumber>0</sequenceNumber>
             <enabled>true</enabled>
@@ -295,21 +295,21 @@ tmp = lines.join('\r');
         </elements>
         <inboundDataType>RAW</inboundDataType>
         <outboundDataType>RAW</outboundDataType>
-        <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
-          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+        <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.1">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.1">
             <splitType>JavaScript</splitType>
             <batchScript></batchScript>
           </batchProperties>
         </inboundProperties>
-        <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
-          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+        <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.1">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.1">
             <splitType>JavaScript</splitType>
             <batchScript></batchScript>
           </batchProperties>
         </outboundProperties>
       </transformer>
 
-      <filter version="4.4.0">
+      <filter version="4.4.1">
         <elements/>
       </filter>
       <transportName>File Writer</transportName>
@@ -319,12 +319,12 @@ tmp = lines.join('\r');
     </connector>
 
     
-    <connector version="4.4.0">
+    <connector version="4.4.1">
       <metaDataId>2</metaDataId>
       <name>Send to OpenEMR FHIR ImagingStudy</name>
-      <properties class="com.mirth.connect.connectors.http.HttpDispatcherProperties" version="4.4.0">
+      <properties class="com.mirth.connect.connectors.http.HttpDispatcherProperties" version="4.4.1">
         <pluginProperties/>
-        <destinationConnectorProperties version="4.4.0">
+        <destinationConnectorProperties version="4.4.1">
           <queueEnabled>true</queueEnabled>
           <sendFirst>false</sendFirst>
           <retryIntervalMillis>30000</retryIntervalMillis>
@@ -371,9 +371,9 @@ tmp = lines.join('\r');
         <socketTimeout>30000</socketTimeout>
       </properties>
 
-      <transformer version="4.4.0">
+      <transformer version="4.4.1">
         <elements>
-          <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.0">
+          <com.mirth.connect.plugins.javascriptrule.JavaScriptRule version="4.4.1">
             <name>Build FHIR ImagingStudy resource</name>
             <sequenceNumber>0</sequenceNumber>
             <enabled>true</enabled>
@@ -420,21 +420,21 @@ tmp = JSON.stringify(resource, null, 2);
         </elements>
         <inboundDataType>RAW</inboundDataType>
         <outboundDataType>RAW</outboundDataType>
-        <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
-          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+        <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.1">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.1">
             <splitType>JavaScript</splitType>
             <batchScript></batchScript>
           </batchProperties>
         </inboundProperties>
-        <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
-          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+        <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.1">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.1">
             <splitType>JavaScript</splitType>
             <batchScript></batchScript>
           </batchProperties>
         </outboundProperties>
       </transformer>
 
-      <filter version="4.4.0">
+      <filter version="4.4.1">
         <elements/>
       </filter>
       <transportName>HTTP Sender</transportName>
@@ -450,7 +450,7 @@ tmp = JSON.stringify(resource, null, 2);
   <deployScript>return;</deployScript>
   <undeployScript>return;</undeployScript>
 
-  <properties class="com.mirth.connect.donkey.model.channel.ChannelProperties" version="4.4.0">
+  <properties class="com.mirth.connect.donkey.model.channel.ChannelProperties" version="4.4.1">
     <clearGlobalChannelMap>false</clearGlobalChannelMap>
     <messageStorageMode>DEVELOPMENT</messageStorageMode>
     <encryptData>false</encryptData>

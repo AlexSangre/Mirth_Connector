@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 
-<channel version="4.4.0">
+<channel version="4.4.1">
   <id>f3a4b5c6-d7e8-9012-fabc-334455667788</id>
   <nextMetaDataId>2</nextMetaDataId>
   <name>CRRT to HL7</name>
@@ -11,12 +11,12 @@
   </lastModified>
   <revision>1</revision>
 
-  <sourceConnector version="4.4.0">
+  <sourceConnector version="4.4.1">
     <metaDataId>0</metaDataId>
     <name>sourceConnector</name>
-    <properties class="com.mirth.connect.connectors.file.FileReceiverProperties" version="4.4.0">
+    <properties class="com.mirth.connect.connectors.file.FileReceiverProperties" version="4.4.1">
       <pluginProperties/>
-      <sourceConnectorProperties version="4.4.0">
+      <sourceConnectorProperties version="4.4.1">
         <responseVariable>None</responseVariable>
         <queueOffload>false</queueOffload>
         <respondAfterProcessing>true</respondAfterProcessing>
@@ -56,9 +56,9 @@
       <charsetEncoding>UTF-8</charsetEncoding>
     </properties>
 
-    <transformer version="4.4.0">
+    <transformer version="4.4.1">
       <elements>
-        <com.mirth.connect.plugins.javascriptstep.JavaScriptStep version="4.4.0">
+        <com.mirth.connect.plugins.javascriptstep.JavaScriptStep version="4.4.1">
           <name>Parse CRRT snapshot</name>
           <sequenceNumber>0</sequenceNumber>
           <enabled>true</enabled>
@@ -81,18 +81,18 @@ logger.info('CRRT snapshot parsed: ' + snapshot.timestamp +
       </elements>
       <inboundDataType>RAW</inboundDataType>
       <outboundDataType>RAW</outboundDataType>
-      <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
-        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+      <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.1">
+        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.1">
           <splitType>JavaScript</splitType><batchScript></batchScript>
         </batchProperties>
       </inboundProperties>
-      <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
-        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+      <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.1">
+        <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.1">
           <splitType>JavaScript</splitType><batchScript></batchScript>
         </batchProperties>
       </outboundProperties>
     </transformer>
-    <filter version="4.4.0"><elements/></filter>
+    <filter version="4.4.1"><elements/></filter>
     <transportName>File Reader</transportName>
     <mode>SOURCE</mode>
     <enabled>true</enabled>
@@ -100,12 +100,12 @@ logger.info('CRRT snapshot parsed: ' + snapshot.timestamp +
   </sourceConnector>
 
   <destinationConnectors>
-    <connector version="4.4.0">
+    <connector version="4.4.1">
       <metaDataId>1</metaDataId>
       <name>Write CRRT HL7 ORU^R01</name>
-      <properties class="com.mirth.connect.connectors.file.FileDispatcherProperties" version="4.4.0">
+      <properties class="com.mirth.connect.connectors.file.FileDispatcherProperties" version="4.4.1">
         <pluginProperties/>
-        <destinationConnectorProperties version="4.4.0">
+        <destinationConnectorProperties version="4.4.1">
           <queueEnabled>false</queueEnabled>
           <sendFirst>false</sendFirst>
           <retryIntervalMillis>5000</retryIntervalMillis>
@@ -139,9 +139,9 @@ logger.info('CRRT snapshot parsed: ' + snapshot.timestamp +
         <binary>false</binary>
       </properties>
 
-      <transformer version="4.4.0">
+      <transformer version="4.4.1">
         <elements>
-          <com.mirth.connect.plugins.javascriptstep.JavaScriptStep version="4.4.0">
+          <com.mirth.connect.plugins.javascriptstep.JavaScriptStep version="4.4.1">
             <name>Build HL7 ORU^R01 — CRRT circuit parameters</name>
             <sequenceNumber>0</sequenceNumber>
             <enabled>true</enabled>
@@ -210,18 +210,18 @@ tmp = lines.join('\r');
         </elements>
         <inboundDataType>RAW</inboundDataType>
         <outboundDataType>RAW</outboundDataType>
-        <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
-          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+        <inboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.1">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.1">
             <splitType>JavaScript</splitType><batchScript></batchScript>
           </batchProperties>
         </inboundProperties>
-        <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.0">
-          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.0">
+        <outboundProperties class="com.mirth.connect.plugins.datatypes.raw.RawDataTypeProperties" version="4.4.1">
+          <batchProperties class="com.mirth.connect.plugins.datatypes.raw.RawBatchProperties" version="4.4.1">
             <splitType>JavaScript</splitType><batchScript></batchScript>
           </batchProperties>
         </outboundProperties>
       </transformer>
-      <filter version="4.4.0"><elements/></filter>
+      <filter version="4.4.1"><elements/></filter>
       <transportName>File Writer</transportName>
       <mode>DESTINATION</mode>
       <enabled>true</enabled>
@@ -234,7 +234,7 @@ tmp = lines.join('\r');
   <deployScript>return;</deployScript>
   <undeployScript>return;</undeployScript>
 
-  <properties class="com.mirth.connect.donkey.model.channel.ChannelProperties" version="4.4.0">
+  <properties class="com.mirth.connect.donkey.model.channel.ChannelProperties" version="4.4.1">
     <clearGlobalChannelMap>true</clearGlobalChannelMap>
     <messageStorageMode>DEVELOPMENT</messageStorageMode>
     <encryptData>false</encryptData>
