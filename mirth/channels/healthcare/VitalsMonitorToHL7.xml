@@ -117,7 +117,7 @@ logger.info('Vitals snapshot parsed: ' + snapshot.timestamp);
         </destinationConnectorProperties>
         <scheme>FILE</scheme>
         <host>/data/hl7_out</host>
-        <outputPattern>VITALS_ORU_${new Date().getTime()}.hl7</outputPattern>
+        <outputPattern>VITALS_ORU_${message.id}.hl7</outputPattern>
         <anonymous>true</anonymous>
         <username></username>
         <password></password>
