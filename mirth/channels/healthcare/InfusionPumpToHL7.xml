@@ -28,7 +28,6 @@
   <nextMetaDataId>2</nextMetaDataId>
   <name>Infusion Pump to HL7</name>
   <description>Reads infusion pump snapshots from the healthcare-v2 Infusion Pump Simulator REST API (via device_exporter) and transforms pump parameters to HL7 v2.5.1 ORU^R01 messages for hospital integration.</description>
-  <enabled>true</enabled>
   <lastModified>
     <time>1750636800000</time>
     <timezone>UTC</timezone>

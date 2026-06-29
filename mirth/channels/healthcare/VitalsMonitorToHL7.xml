@@ -22,7 +22,6 @@
   <nextMetaDataId>2</nextMetaDataId>
   <name>Vitals Monitor to HL7</name>
   <description>Reads vital signs snapshots from the healthcare-v2 PatientMonitor REST API (via device_exporter) and transforms them to HL7 v2.5.1 ORU^R01 messages for hospital integration.</description>
-  <enabled>true</enabled>
   <lastModified>
     <time>1750636800000</time>
     <timezone>UTC</timezone>

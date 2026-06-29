@@ -27,7 +27,6 @@
   <nextMetaDataId>3</nextMetaDataId>
   <name>Vital Signs Alerts</name>
   <description>Reads latest PLC vital signs snapshot, evaluates clinical thresholds, and generates priority HL7 ORU^R01 messages with abnormal OBX flags only when values are out of range. Simulates ICU clinical surveillance alerting.</description>
-  <enabled>true</enabled>
   <lastModified>
     <time>1717545600000</time>
     <timezone>UTC</timezone>

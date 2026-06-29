@@ -28,7 +28,6 @@
   <nextMetaDataId>3</nextMetaDataId>
   <name>Orthanc to OpenEMR</name>
   <description>Polls Orthanc REST API for new DICOM studies and sends HL7 v2 ORU^R01 notifications to OpenEMR. Triggered by TAC scan events from plc_tac via gizmo-brain.py and send_dicom.py.</description>
-  <enabled>true</enabled>
   <lastModified>
     <time>1717545600000</time>
     <timezone>UTC</timezone>
